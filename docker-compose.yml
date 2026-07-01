@@ -1,0 +1,17 @@
+services:
+  telethon-media-bot:
+    build: .
+    image: telethon-media-bot:latest
+    container_name: telethon-media-bot
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      AUTO_START_BOT: "false"
+      DOWNLOAD_DIR: /downloads
+      SESSION_DIR: /sessions
+      CONFIG_DIR: /config
+    volumes:
+      - ./downloads:/downloads
+      - ./sessions:/sessions
+      - ./config:/config

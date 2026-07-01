@@ -1,0 +1,149 @@
+from __future__ import annotations
+
+import json
+import os
+from dataclasses import asdict, dataclass
+from pathlib import Path
+from typing import Any
+
+
+def _optional_int(value: str | None) -> int | None:
+    if value is None or not value.strip():
+        return None
+    try:
+        return int(value)
+    except ValueError as exc:
+        raise RuntimeError("API_ID must be an integer") from exc
+
+
+@dataclass
+class Settings:
+    api_id: int | None = None
+    api_hash: str = ""
+    bot_token: str = ""
+    download_dir: Path = Path("/downloads")
+    session_dir: Path = Path("/sessions")
+    config_dir: Path = Path("/config")
+    session_name: str = "media_downloader_bot"
+    progress_interval_seconds: float = 3.0
+    progress_percent_step: int = 10
+    max_filename_stem_length: int = 120
+    log_level: str = "INFO"
+
+    @property
+    def ready(self) -> bool:
+        return bool(self.api_id and self.api_hash.strip() and self.bot_token.strip())
+
+    @property
+    def config_path(self) -> Path:
+        return self.config_dir / "settings.json"
+
+    def public_dict(self) -> dict[str, Any]:
+        return {
+            "api_id": self.api_id,
+            "api_hash_set": bool(self.api_hash),
+            "bot_token_set": bool(self.bot_token),
+            "download_dir": str(self.download_dir),
+            "session_dir": str(self.session_dir),
+            "session_name": self.session_name,
+            "progress_interval_seconds": self.progress_interval_seconds,
+            "progress_percent_step": self.progress_percent_step,
+            "max_filename_stem_length": self.max_filename_stem_length,
+            "ready": self.ready,
+        }
+
+    def to_json_dict(self) -> dict[str, Any]:
+        data = asdict(self)
+        for key in ("download_dir", "session_dir", "config_dir"):
+            data[key] = str(data[key])
+        return data
+
+    @classmethod
+    def from_json_dict(cls, data: dict[str, Any]) -> "Settings":
+        return cls(
+            api_id=_optional_int(str(data.get("api_id"))) if data.get("api_id") is not None else None,
+            api_hash=str(data.get("api_hash") or ""),
+            bot_token=str(data.get("bot_token") or ""),
+            download_dir=Path(data.get("download_dir") or "/downloads").resolve(),
+            session_dir=Path(data.get("session_dir") or "/sessions").resolve(),
+            config_dir=Path(data.get("config_dir") or "/config").resolve(),
+            session_name=str(data.get("session_name") or "media_downloader_bot"),
+            progress_interval_seconds=float(data.get("progress_interval_seconds") or 3),
+            progress_percent_step=int(data.get("progress_percent_step") or 10),
+            max_filename_stem_length=int(data.get("max_filename_stem_length") or 120),
+            log_level=str(data.get("log_level") or "INFO"),
+        )
+
+    @classmethod
+    def from_env(cls) -> "Settings":
+        return cls(
+            api_id=_optional_int(os.getenv("API_ID")),
+            api_hash=os.getenv("API_HASH", "").strip(),
+            bot_token=os.getenv("BOT_TOKEN", "").strip(),
+            download_dir=Path(os.getenv("DOWNLOAD_DIR", "/downloads")).resolve(),
+            session_dir=Path(os.getenv("SESSION_DIR", "/sessions")).resolve(),
+            config_dir=Path(os.getenv("CONFIG_DIR", "/config")).resolve(),
+            session_name=os.getenv("SESSION_NAME", "media_downloader_bot").strip()
+            or "media_downloader_bot",
+            progress_interval_seconds=float(os.getenv("PROGRESS_INTERVAL_SECONDS", "3")),
+            progress_percent_step=int(os.getenv("PROGRESS_PERCENT_STEP", "10")),
+            max_filename_stem_length=int(os.getenv("MAX_FILENAME_STEM_LENGTH", "120")),
+            log_level=os.getenv("LOG_LEVEL", "INFO").upper(),
+        )
+
+
+class SettingsStore:
+    def __init__(self, settings: Settings):
+        self._settings = settings
+        self._settings.config_dir.mkdir(parents=True, exist_ok=True)
+        self._load_saved()
+
+    @property
+    def settings(self) -> Settings:
+        return self._settings
+
+    def _load_saved(self) -> None:
+        path = self._settings.config_path
+        if not path.exists():
+            return
+        with path.open("r", encoding="utf-8") as handle:
+            saved = Settings.from_json_dict(json.load(handle))
+
+        env_seed = self._settings
+        if not saved.api_id:
+            saved.api_id = env_seed.api_id
+        if not saved.api_hash:
+            saved.api_hash = env_seed.api_hash
+        if not saved.bot_token:
+            saved.bot_token = env_seed.bot_token
+        saved.config_dir = env_seed.config_dir
+        self._settings = saved
+
+    def save(self, updates: dict[str, Any]) -> Settings:
+        current = self._settings
+        data = current.to_json_dict()
+
+        for key in (
+            "api_id",
+            "api_hash",
+            "bot_token",
+            "download_dir",
+            "session_dir",
+            "session_name",
+            "progress_interval_seconds",
+            "progress_percent_step",
+            "max_filename_stem_length",
+        ):
+            if key not in updates:
+                continue
+            value = updates[key]
+            if key in {"api_hash", "bot_token"} and value == "":
+                continue
+            data[key] = value
+
+        data["config_dir"] = str(current.config_dir)
+        self._settings = Settings.from_json_dict(data)
+        self._settings.config_dir.mkdir(parents=True, exist_ok=True)
+        with self._settings.config_path.open("w", encoding="utf-8") as handle:
+            json.dump(self._settings.to_json_dict(), handle, indent=2)
+        return self._settings
