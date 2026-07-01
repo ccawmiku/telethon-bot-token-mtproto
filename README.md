@@ -59,6 +59,26 @@ docker run -d --name telethon-media-bot \
 
 Linux/macOS 可把 `"%cd%"` 换成 `"$(pwd)"`。
 
+## GitHub Actions 构建镜像
+
+仓库包含 `.github/workflows/docker-image.yml`。推送到 `main` 或在 GitHub Actions 页面手动运行 `Docker Image` 后，会构建并推送镜像到 GitHub Container Registry：
+
+```text
+ghcr.io/ccawmiku/telethon-bot-token-mtproto:latest
+```
+
+拉取镜像：
+
+```bash
+docker pull ghcr.io/ccawmiku/telethon-bot-token-mtproto:latest
+```
+
+如果仓库或 package 是私有的，需要先登录 GHCR：
+
+```bash
+echo YOUR_GITHUB_TOKEN | docker login ghcr.io -u YOUR_GITHUB_USERNAME --password-stdin
+```
+
 ## 通过环境变量预填配置
 
 也可以复制 `.env.example` 为 `.env`，然后用 `docker run --env-file .env` 或自行在 Compose 中加入环境变量。设置 `AUTO_START_BOT=true` 后，如果参数完整，服务启动时会自动启动 bot。
