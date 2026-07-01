@@ -20,7 +20,8 @@
 ## Docker Compose 运行
 
 ```bash
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 ```
 
 打开控制面板：
@@ -31,7 +32,7 @@ http://localhost:8000
 
 在网页里填写 `API_ID`、`API_HASH`、`BOT_TOKEN`，点击 `Save Settings`，再点击 `Start`。
 
-下载文件保存在宿主机的 `./downloads`，Telethon session 保存在 `./sessions`，网页保存的配置和下载记录保存在 `./config`。
+下载文件保存在宿主机的 `/opt/telethon-media-bot/downloads`，Telethon session 保存在 `/opt/telethon-media-bot/sessions`，网页保存的配置和下载记录保存在 `/opt/telethon-media-bot/config`。
 
 查看日志：
 
@@ -58,6 +59,27 @@ docker run -d --name telethon-media-bot \
 ```
 
 Linux/macOS 可把 `"%cd%"` 换成 `"$(pwd)"`。
+
+## 使用已发布镜像
+
+当前 `docker-compose.yml` 默认使用 GitHub Actions 构建好的镜像：
+
+```text
+ghcr.io/ccawmiku/telethon-bot-token-mtproto:latest
+```
+
+部署前创建挂载目录：
+
+```bash
+sudo mkdir -p /opt/telethon-media-bot/downloads /opt/telethon-media-bot/sessions /opt/telethon-media-bot/config
+```
+
+启动：
+
+```bash
+docker compose pull
+docker compose up -d
+```
 
 ## GitHub Actions 构建镜像
 
