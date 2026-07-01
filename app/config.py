@@ -22,6 +22,9 @@ class Settings:
     api_hash: str = ""
     bot_token: str = ""
     download_dir: Path = Path("/downloads")
+    image_download_dir: Path = Path("/downloads/images")
+    video_download_dir: Path = Path("/downloads/videos")
+    file_download_dir: Path = Path("/downloads/files")
     session_dir: Path = Path("/sessions")
     config_dir: Path = Path("/config")
     session_name: str = "media_downloader_bot"
@@ -44,6 +47,9 @@ class Settings:
             "api_hash_set": bool(self.api_hash),
             "bot_token_set": bool(self.bot_token),
             "download_dir": str(self.download_dir),
+            "image_download_dir": str(self.image_download_dir),
+            "video_download_dir": str(self.video_download_dir),
+            "file_download_dir": str(self.file_download_dir),
             "session_dir": str(self.session_dir),
             "session_name": self.session_name,
             "progress_interval_seconds": self.progress_interval_seconds,
@@ -54,17 +60,46 @@ class Settings:
 
     def to_json_dict(self) -> dict[str, Any]:
         data = asdict(self)
-        for key in ("download_dir", "session_dir", "config_dir"):
+        for key in (
+            "download_dir",
+            "image_download_dir",
+            "video_download_dir",
+            "file_download_dir",
+            "session_dir",
+            "config_dir",
+        ):
             data[key] = str(data[key])
         return data
 
+    def media_dir(self, kind: str) -> Path:
+        if kind in {"photo", "image"}:
+            return self.image_download_dir
+        if kind == "video":
+            return self.video_download_dir
+        return self.file_download_dir
+
+    def ensure_dirs(self) -> None:
+        for path in (
+            self.download_dir,
+            self.image_download_dir,
+            self.video_download_dir,
+            self.file_download_dir,
+            self.session_dir,
+            self.config_dir,
+        ):
+            path.mkdir(parents=True, exist_ok=True)
+
     @classmethod
     def from_json_dict(cls, data: dict[str, Any]) -> "Settings":
+        download_dir = Path(data.get("download_dir") or "/downloads").resolve()
         return cls(
             api_id=_optional_int(str(data.get("api_id"))) if data.get("api_id") is not None else None,
             api_hash=str(data.get("api_hash") or ""),
             bot_token=str(data.get("bot_token") or ""),
-            download_dir=Path(data.get("download_dir") or "/downloads").resolve(),
+            download_dir=download_dir,
+            image_download_dir=Path(data.get("image_download_dir") or download_dir / "images").resolve(),
+            video_download_dir=Path(data.get("video_download_dir") or download_dir / "videos").resolve(),
+            file_download_dir=Path(data.get("file_download_dir") or download_dir / "files").resolve(),
             session_dir=Path(data.get("session_dir") or "/sessions").resolve(),
             config_dir=Path(data.get("config_dir") or "/config").resolve(),
             session_name=str(data.get("session_name") or "media_downloader_bot"),
@@ -76,11 +111,15 @@ class Settings:
 
     @classmethod
     def from_env(cls) -> "Settings":
+        download_dir = Path(os.getenv("DOWNLOAD_DIR", "/downloads")).resolve()
         return cls(
             api_id=_optional_int(os.getenv("API_ID")),
             api_hash=os.getenv("API_HASH", "").strip(),
             bot_token=os.getenv("BOT_TOKEN", "").strip(),
-            download_dir=Path(os.getenv("DOWNLOAD_DIR", "/downloads")).resolve(),
+            download_dir=download_dir,
+            image_download_dir=Path(os.getenv("IMAGE_DOWNLOAD_DIR", download_dir / "images")).resolve(),
+            video_download_dir=Path(os.getenv("VIDEO_DOWNLOAD_DIR", download_dir / "videos")).resolve(),
+            file_download_dir=Path(os.getenv("FILE_DOWNLOAD_DIR", download_dir / "files")).resolve(),
             session_dir=Path(os.getenv("SESSION_DIR", "/sessions")).resolve(),
             config_dir=Path(os.getenv("CONFIG_DIR", "/config")).resolve(),
             session_name=os.getenv("SESSION_NAME", "media_downloader_bot").strip()
@@ -128,6 +167,9 @@ class SettingsStore:
             "api_hash",
             "bot_token",
             "download_dir",
+            "image_download_dir",
+            "video_download_dir",
+            "file_download_dir",
             "session_dir",
             "session_name",
             "progress_interval_seconds",

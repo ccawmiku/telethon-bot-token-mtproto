@@ -27,30 +27,31 @@ templates = Jinja2Templates(directory="app/templates")
 app = FastAPI(title="Telethon Media Downloader Bot")
 
 
-def list_downloaded_files(download_dir: Path) -> list[dict[str, Any]]:
-    download_dir.mkdir(parents=True, exist_ok=True)
+def list_downloaded_files(download_dirs: dict[str, Path]) -> list[dict[str, Any]]:
     files: list[dict[str, Any]] = []
-    for path in sorted(download_dir.iterdir(), key=lambda item: item.stat().st_mtime, reverse=True):
-        if not path.is_file():
-            continue
-        stat = path.stat()
-        files.append(
-            {
-                "name": path.name,
-                "size_bytes": stat.st_size,
-                "modified_at": stat.st_mtime,
-                "url": f"/files/{path.name}",
-            }
-        )
+    for category, download_dir in download_dirs.items():
+        download_dir.mkdir(parents=True, exist_ok=True)
+        for path in download_dir.iterdir():
+            if not path.is_file():
+                continue
+            stat = path.stat()
+            files.append(
+                {
+                    "category": category,
+                    "name": path.name,
+                    "size_bytes": stat.st_size,
+                    "modified_at": stat.st_mtime,
+                    "url": f"/files/{category}/{path.name}",
+                }
+            )
+    files.sort(key=lambda item: item["modified_at"], reverse=True)
     return files[:200]
 
 
 @app.on_event("startup")
 async def startup() -> None:
     current = settings_store.settings
-    current.download_dir.mkdir(parents=True, exist_ok=True)
-    current.session_dir.mkdir(parents=True, exist_ok=True)
-    current.config_dir.mkdir(parents=True, exist_ok=True)
+    current.ensure_dirs()
     if current.ready and os.getenv("AUTO_START_BOT", "false").lower() in {"1", "true", "yes"}:
         try:
             await bot_manager.start(current)
@@ -76,7 +77,13 @@ async def api_state():
         "settings": current.public_dict(),
         "bot": bot_manager.state(),
         "downloads": history.list(),
-        "files": list_downloaded_files(current.download_dir),
+        "files": list_downloaded_files(
+            {
+                "images": current.image_download_dir,
+                "videos": current.video_download_dir,
+                "files": current.file_download_dir,
+            }
+        ),
     }
 
 
@@ -84,8 +91,7 @@ async def api_state():
 async def save_settings(payload: dict[str, Any]):
     was_running = bot_manager.running
     current = settings_store.save(payload)
-    current.download_dir.mkdir(parents=True, exist_ok=True)
-    current.session_dir.mkdir(parents=True, exist_ok=True)
+    current.ensure_dirs()
     if was_running:
         await bot_manager.restart(current)
     return {"settings": current.public_dict(), "bot": bot_manager.state()}
@@ -115,9 +121,17 @@ async def restart_bot():
     return {"bot": bot_manager.state()}
 
 
-@app.get("/files/{file_name}")
-async def get_file(file_name: str):
-    download_dir = settings_store.settings.download_dir.resolve()
+@app.get("/files/{category}/{file_name}")
+async def get_file(category: str, file_name: str):
+    current = settings_store.settings
+    download_dirs = {
+        "images": current.image_download_dir.resolve(),
+        "videos": current.video_download_dir.resolve(),
+        "files": current.file_download_dir.resolve(),
+    }
+    if category not in download_dirs:
+        raise HTTPException(status_code=404, detail="File not found")
+    download_dir = download_dirs[category]
     target = (download_dir / file_name).resolve()
     if download_dir not in target.parents and target != download_dir:
         raise HTTPException(status_code=404, detail="File not found")

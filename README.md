@@ -32,7 +32,7 @@ http://localhost:8000
 
 在网页里填写 `API_ID`、`API_HASH`、`BOT_TOKEN`，点击 `Save Settings`，再点击 `Start`。
 
-下载文件保存在宿主机的 `/opt/telethon-media-bot/downloads`，Telethon session 保存在 `/opt/telethon-media-bot/sessions`，网页保存的配置和下载记录保存在 `/opt/telethon-media-bot/config`。
+图片保存在宿主机的 `/opt/telethon-media-bot/images`，视频保存在 `/opt/telethon-media-bot/videos`，其他文件保存在 `/opt/telethon-media-bot/files`。Telethon session 保存在 `/opt/telethon-media-bot/sessions`，网页保存的配置和下载记录保存在 `/opt/telethon-media-bot/config`。
 
 查看日志：
 
@@ -52,7 +52,9 @@ docker build -t telethon-media-bot:latest .
 docker run -d --name telethon-media-bot \
   --restart unless-stopped \
   -p 8000:8000 \
-  -v "%cd%/downloads:/downloads" \
+  -v "%cd%/images:/downloads/images" \
+  -v "%cd%/videos:/downloads/videos" \
+  -v "%cd%/files:/downloads/files" \
   -v "%cd%/sessions:/sessions" \
   -v "%cd%/config:/config" \
   telethon-media-bot:latest
@@ -71,7 +73,7 @@ ghcr.io/ccawmiku/telethon-bot-token-mtproto:latest
 部署前创建挂载目录：
 
 ```bash
-sudo mkdir -p /opt/telethon-media-bot/downloads /opt/telethon-media-bot/sessions /opt/telethon-media-bot/config
+sudo mkdir -p /opt/telethon-media-bot/images /opt/telethon-media-bot/videos /opt/telethon-media-bot/files /opt/telethon-media-bot/sessions /opt/telethon-media-bot/config
 ```
 
 启动：
@@ -111,6 +113,9 @@ echo YOUR_GITHUB_TOKEN | docker login ghcr.io -u YOUR_GITHUB_USERNAME --password
 | `API_HASH` | 空 | Telegram app API Hash |
 | `BOT_TOKEN` | 空 | BotFather 生成的 token |
 | `DOWNLOAD_DIR` | `/downloads` | 容器内下载目录 |
+| `IMAGE_DOWNLOAD_DIR` | `/downloads/images` | 容器内图片下载目录 |
+| `VIDEO_DOWNLOAD_DIR` | `/downloads/videos` | 容器内视频下载目录 |
+| `FILE_DOWNLOAD_DIR` | `/downloads/files` | 容器内其他文件下载目录 |
 | `SESSION_DIR` | `/sessions` | 容器内 session 目录 |
 | `CONFIG_DIR` | `/config` | 网页配置和下载记录目录 |
 | `SESSION_NAME` | `media_downloader_bot` | session 文件名 |
@@ -122,6 +127,6 @@ echo YOUR_GITHUB_TOKEN | docker login ghcr.io -u YOUR_GITHUB_USERNAME --password
 
 ## 注意
 
-- 控制面板会保存 bot token，请不要把 `config/`、`.env`、`sessions/`、`downloads/` 提交到 GitHub。
+- 控制面板会保存 bot token，请不要把 `config/`、`.env`、`sessions/`、`images/`、`videos/`、`files/` 提交到 GitHub。
 - 如果把服务部署到公网，请放在反向代理认证或内网访问控制后面。
 - bot 默认只能接收用户主动发给它的消息。用于群组时，需要把 bot 拉入群组，并根据 BotFather 的隐私设置调整可见消息范围。

@@ -17,7 +17,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app ./app
 
-RUN mkdir -p /downloads /sessions /config && chown -R bot:bot /app /downloads /sessions /config
+RUN mkdir -p /downloads/images /downloads/videos /downloads/files /sessions /config \
+    && chown -R bot:bot /app /downloads /sessions /config
 
 USER bot
 

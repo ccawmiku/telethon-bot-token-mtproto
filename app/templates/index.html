@@ -318,6 +318,18 @@
               <input id="downloadDir" name="download_dir" />
             </label>
             <label class="field">
+              <span>Image Directory</span>
+              <input id="imageDownloadDir" name="image_download_dir" />
+            </label>
+            <label class="field">
+              <span>Video Directory</span>
+              <input id="videoDownloadDir" name="video_download_dir" />
+            </label>
+            <label class="field">
+              <span>Other Files Directory</span>
+              <input id="fileDownloadDir" name="file_download_dir" />
+            </label>
+            <label class="field">
               <span>Session Directory</span>
               <input id="sessionDir" name="session_dir" />
             </label>
@@ -362,6 +374,7 @@
               <thead>
                 <tr>
                   <th>File</th>
+                  <th>Type</th>
                   <th>Size</th>
                   <th>Modified</th>
                   <th>Action</th>
@@ -391,6 +404,9 @@
         apiHash: document.querySelector("#apiHash"),
         botToken: document.querySelector("#botToken"),
         downloadDir: document.querySelector("#downloadDir"),
+        imageDownloadDir: document.querySelector("#imageDownloadDir"),
+        videoDownloadDir: document.querySelector("#videoDownloadDir"),
+        fileDownloadDir: document.querySelector("#fileDownloadDir"),
         sessionDir: document.querySelector("#sessionDir"),
         progressInterval: document.querySelector("#progressInterval"),
         progressStep: document.querySelector("#progressStep")
@@ -442,6 +458,9 @@
         if (!firstLoad) return;
         els.apiId.value = settings.api_id || "";
         els.downloadDir.value = settings.download_dir || "/downloads";
+        els.imageDownloadDir.value = settings.image_download_dir || "/downloads/images";
+        els.videoDownloadDir.value = settings.video_download_dir || "/downloads/videos";
+        els.fileDownloadDir.value = settings.file_download_dir || "/downloads/files";
         els.sessionDir.value = settings.session_dir || "/sessions";
         els.progressInterval.value = settings.progress_interval_seconds || 3;
         els.progressStep.value = settings.progress_percent_step || 10;
@@ -465,11 +484,12 @@
         els.filesBody.innerHTML = files.map((item) => `
           <tr>
             <td><div class="file-name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</div></td>
+            <td><span class="badge">${escapeHtml(item.category)}</span></td>
             <td>${formatBytes(item.size_bytes)}</td>
             <td>${formatTime(item.modified_at)}</td>
             <td><a href="${encodeURI(item.url)}">Download</a></td>
           </tr>
-        `).join("") || `<tr><td colspan="4" class="muted">No files yet</td></tr>`;
+        `).join("") || `<tr><td colspan="5" class="muted">No files yet</td></tr>`;
       }
 
       async function refresh() {
@@ -497,6 +517,9 @@
           api_hash: els.apiHash.value.trim(),
           bot_token: els.botToken.value.trim(),
           download_dir: els.downloadDir.value.trim() || "/downloads",
+          image_download_dir: els.imageDownloadDir.value.trim() || "/downloads/images",
+          video_download_dir: els.videoDownloadDir.value.trim() || "/downloads/videos",
+          file_download_dir: els.fileDownloadDir.value.trim() || "/downloads/files",
           session_dir: els.sessionDir.value.trim() || "/sessions",
           progress_interval_seconds: Number(els.progressInterval.value || 3),
           progress_percent_step: Number(els.progressStep.value || 10)

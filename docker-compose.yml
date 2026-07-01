@@ -6,6 +6,8 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - /opt/telethon-media-bot/downloads:/downloads
+      - /opt/telethon-media-bot/images:/downloads/images
+      - /opt/telethon-media-bot/videos:/downloads/videos
+      - /opt/telethon-media-bot/files:/downloads/files
       - /opt/telethon-media-bot/sessions:/sessions
       - /opt/telethon-media-bot/config:/config

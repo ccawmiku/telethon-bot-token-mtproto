@@ -11,7 +11,7 @@ from telethon import TelegramClient, events
 from telethon.errors import FloodWaitError, MessageNotModifiedError, RPCError
 
 from app.config import Settings
-from app.file_naming import unique_media_path
+from app.file_naming import media_kind, unique_media_path
 from app.history import DownloadHistory, DownloadRecord
 
 logger = logging.getLogger("media-downloader-bot")
@@ -125,8 +125,7 @@ class BotManager:
             if not settings.ready:
                 raise RuntimeError("API_ID, API_HASH, and BOT_TOKEN are required before starting the bot")
 
-            settings.download_dir.mkdir(parents=True, exist_ok=True)
-            settings.session_dir.mkdir(parents=True, exist_ok=True)
+            settings.ensure_dirs()
             session_path = settings.session_dir / settings.session_name
             client = TelegramClient(str(session_path), settings.api_id, settings.api_hash)
 
@@ -174,9 +173,10 @@ class BotManager:
             await event.reply("Please send me a photo, video, or file to download.")
             return
 
+        kind = media_kind(message)
         target_path = unique_media_path(
             message,
-            settings.download_dir,
+            settings.media_dir(kind),
             settings.max_filename_stem_length,
         )
         record_id = uuid.uuid4().hex
