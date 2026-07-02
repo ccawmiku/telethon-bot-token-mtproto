@@ -71,7 +71,7 @@ Linux/macOS 可把 `"%cd%"` 换成 `"$(pwd)"`。
 当前 `docker-compose.yml` 默认使用 GitHub Actions 构建好的版本化镜像：
 
 ```text
-ghcr.io/ccawmiku/telethon-bot-token-mtproto:v1.1
+ghcr.io/ccawmiku/telethon-bot-token-mtproto:v1.2
 ```
 
 部署前创建挂载目录：
@@ -92,13 +92,13 @@ docker compose up -d
 仓库包含 `.github/workflows/docker-image.yml`。推送 `v*` 版本标签后，会构建并推送镜像到 GitHub Container Registry。发布新版本时需要递增版本号，例如 `v1.1`、`v1.2`：
 
 ```text
-ghcr.io/ccawmiku/telethon-bot-token-mtproto:v1.1
+ghcr.io/ccawmiku/telethon-bot-token-mtproto:v1.2
 ```
 
 拉取镜像：
 
 ```bash
-docker pull ghcr.io/ccawmiku/telethon-bot-token-mtproto:v1.1
+docker pull ghcr.io/ccawmiku/telethon-bot-token-mtproto:v1.2
 ```
 
 如果仓库或 package 是私有的，需要先登录 GHCR：
@@ -136,3 +136,23 @@ echo YOUR_GITHUB_TOKEN | docker login ghcr.io -u YOUR_GITHUB_USERNAME --password
 - 控制面板会保存 bot token，请不要把 `config/`、`.env`、`sessions/`、`images/`、`videos/`、`files/` 提交到 GitHub。
 - 如果把服务部署到公网，请放在反向代理认证或内网访问控制后面。
 - bot 默认只能接收用户主动发给它的消息。用于群组时，需要把 bot 拉入群组，并根据 BotFather 的隐私设置调整可见消息范围。
+
+## 重置控制台密码
+
+如果还没主动设置密码却看到登录页，通常是环境变量 `ADMIN_PASSWORD` 或旧配置已经写入了密码。可以删除配置文件里的 `admin_password_hash` 来重置，其他 bot 配置会保留：
+
+```bash
+sudo python3 - <<'PY'
+import json
+from pathlib import Path
+
+path = Path("/opt/telethon-media-bot/config/settings.json")
+data = json.loads(path.read_text(encoding="utf-8"))
+data.pop("admin_password_hash", None)
+path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+PY
+
+docker compose restart
+```
+
+如果你在 Compose 或面板环境变量里设置过 `ADMIN_PASSWORD`，也要先删掉这个环境变量。
