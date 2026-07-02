@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import json
 import os
+import hashlib
+import hmac
+import secrets
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -16,6 +19,50 @@ def _optional_int(value: str | None) -> int | None:
         raise RuntimeError("API_ID must be an integer") from exc
 
 
+def parse_user_ids(value: Any) -> list[int]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        parts = value
+    else:
+        parts = str(value).replace("\n", ",").replace(" ", ",").split(",")
+
+    user_ids: list[int] = []
+    for part in parts:
+        if part is None or str(part).strip() == "":
+            continue
+        try:
+            user_id = int(str(part).strip())
+        except ValueError as exc:
+            raise RuntimeError("Allowed user IDs must be integers") from exc
+        if user_id not in user_ids:
+            user_ids.append(user_id)
+    return user_ids
+
+
+def hash_password(password: str) -> str:
+    salt = secrets.token_bytes(16)
+    iterations = 260_000
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations)
+    return f"pbkdf2_sha256${iterations}${salt.hex()}${digest.hex()}"
+
+
+def verify_password(password: str, password_hash: str) -> bool:
+    try:
+        algorithm, iterations, salt_hex, digest_hex = password_hash.split("$", 3)
+    except ValueError:
+        return False
+    if algorithm != "pbkdf2_sha256":
+        return False
+    expected = hashlib.pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        bytes.fromhex(salt_hex),
+        int(iterations),
+    )
+    return hmac.compare_digest(expected.hex(), digest_hex)
+
+
 @dataclass
 class Settings:
     api_id: int | None = None
@@ -27,6 +74,8 @@ class Settings:
     file_download_dir: Path = Path("/downloads/files")
     session_dir: Path = Path("/sessions")
     config_dir: Path = Path("/config")
+    allowed_user_ids: list[int] | None = None
+    admin_password_hash: str = ""
     session_name: str = "media_downloader_bot"
     progress_interval_seconds: float = 3.0
     progress_percent_step: int = 10
@@ -51,6 +100,8 @@ class Settings:
             "video_download_dir": str(self.video_download_dir),
             "file_download_dir": str(self.file_download_dir),
             "session_dir": str(self.session_dir),
+            "allowed_user_ids": self.allowed_user_ids or [],
+            "admin_password_set": bool(self.admin_password_hash),
             "session_name": self.session_name,
             "progress_interval_seconds": self.progress_interval_seconds,
             "progress_percent_step": self.progress_percent_step,
@@ -102,6 +153,8 @@ class Settings:
             file_download_dir=Path(data.get("file_download_dir") or download_dir / "files").resolve(),
             session_dir=Path(data.get("session_dir") or "/sessions").resolve(),
             config_dir=Path(data.get("config_dir") or "/config").resolve(),
+            allowed_user_ids=parse_user_ids(data.get("allowed_user_ids")),
+            admin_password_hash=str(data.get("admin_password_hash") or ""),
             session_name=str(data.get("session_name") or "media_downloader_bot"),
             progress_interval_seconds=float(data.get("progress_interval_seconds") or 3),
             progress_percent_step=int(data.get("progress_percent_step") or 10),
@@ -122,6 +175,10 @@ class Settings:
             file_download_dir=Path(os.getenv("FILE_DOWNLOAD_DIR", download_dir / "files")).resolve(),
             session_dir=Path(os.getenv("SESSION_DIR", "/sessions")).resolve(),
             config_dir=Path(os.getenv("CONFIG_DIR", "/config")).resolve(),
+            allowed_user_ids=parse_user_ids(os.getenv("ALLOWED_USER_IDS")),
+            admin_password_hash=hash_password(os.getenv("ADMIN_PASSWORD", ""))
+            if os.getenv("ADMIN_PASSWORD")
+            else "",
             session_name=os.getenv("SESSION_NAME", "media_downloader_bot").strip()
             or "media_downloader_bot",
             progress_interval_seconds=float(os.getenv("PROGRESS_INTERVAL_SECONDS", "3")),
@@ -155,6 +212,10 @@ class SettingsStore:
             saved.api_hash = env_seed.api_hash
         if not saved.bot_token:
             saved.bot_token = env_seed.bot_token
+        if not saved.allowed_user_ids:
+            saved.allowed_user_ids = env_seed.allowed_user_ids
+        if not saved.admin_password_hash:
+            saved.admin_password_hash = env_seed.admin_password_hash
         saved.config_dir = env_seed.config_dir
         self._settings = saved
 
@@ -171,6 +232,7 @@ class SettingsStore:
             "video_download_dir",
             "file_download_dir",
             "session_dir",
+            "allowed_user_ids",
             "session_name",
             "progress_interval_seconds",
             "progress_percent_step",
@@ -182,6 +244,9 @@ class SettingsStore:
             if key in {"api_hash", "bot_token"} and value == "":
                 continue
             data[key] = value
+
+        if updates.get("admin_password"):
+            data["admin_password_hash"] = hash_password(str(updates["admin_password"]))
 
         data["config_dir"] = str(current.config_dir)
         self._settings = Settings.from_json_dict(data)
