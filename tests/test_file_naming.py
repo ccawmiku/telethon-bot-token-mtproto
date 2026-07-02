@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from app.config import Settings, hash_password, parse_user_ids, verify_password
+from app.config import Settings, SettingsStore, hash_password, parse_user_ids, verify_password
 from app.file_naming import sanitize_filename
 
 
@@ -46,3 +46,23 @@ def test_password_hash_verification():
 
     assert verify_password("secret-password", password_hash)
     assert not verify_password("wrong-password", password_hash)
+
+
+def test_env_password_overrides_saved_password(tmp_path):
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    old_hash = hash_password("old-password")
+    (config_dir / "settings.json").write_text(
+        '{"admin_password_hash": "' + old_hash + '"}',
+        encoding="utf-8",
+    )
+    env_settings = Settings(
+        config_dir=config_dir,
+        admin_password_hash=hash_password("new-password"),
+        admin_password_from_env=True,
+    )
+
+    store = SettingsStore(env_settings)
+
+    assert verify_password("new-password", store.settings.admin_password_hash)
+    assert not verify_password("old-password", store.settings.admin_password_hash)

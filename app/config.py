@@ -76,6 +76,7 @@ class Settings:
     config_dir: Path = Path("/config")
     allowed_user_ids: list[int] | None = None
     admin_password_hash: str = ""
+    admin_password_from_env: bool = False
     session_name: str = "media_downloader_bot"
     progress_interval_seconds: float = 3.0
     progress_percent_step: int = 10
@@ -120,6 +121,7 @@ class Settings:
             "config_dir",
         ):
             data[key] = str(data[key])
+        data.pop("admin_password_from_env", None)
         return data
 
     def media_dir(self, kind: str) -> Path:
@@ -155,6 +157,7 @@ class Settings:
             config_dir=Path(data.get("config_dir") or "/config").resolve(),
             allowed_user_ids=parse_user_ids(data.get("allowed_user_ids")),
             admin_password_hash=str(data.get("admin_password_hash") or ""),
+            admin_password_from_env=bool(data.get("admin_password_from_env")),
             session_name=str(data.get("session_name") or "media_downloader_bot"),
             progress_interval_seconds=float(data.get("progress_interval_seconds") or 3),
             progress_percent_step=int(data.get("progress_percent_step") or 10),
@@ -165,6 +168,7 @@ class Settings:
     @classmethod
     def from_env(cls) -> "Settings":
         download_dir = Path(os.getenv("DOWNLOAD_DIR", "/downloads")).resolve()
+        admin_password = os.getenv("ADMIN_PASSWORD", "")
         return cls(
             api_id=_optional_int(os.getenv("API_ID")),
             api_hash=os.getenv("API_HASH", "").strip(),
@@ -176,9 +180,8 @@ class Settings:
             session_dir=Path(os.getenv("SESSION_DIR", "/sessions")).resolve(),
             config_dir=Path(os.getenv("CONFIG_DIR", "/config")).resolve(),
             allowed_user_ids=parse_user_ids(os.getenv("ALLOWED_USER_IDS")),
-            admin_password_hash=hash_password(os.getenv("ADMIN_PASSWORD", ""))
-            if os.getenv("ADMIN_PASSWORD")
-            else "",
+            admin_password_hash=hash_password(admin_password) if admin_password else "",
+            admin_password_from_env=bool(admin_password),
             session_name=os.getenv("SESSION_NAME", "media_downloader_bot").strip()
             or "media_downloader_bot",
             progress_interval_seconds=float(os.getenv("PROGRESS_INTERVAL_SECONDS", "3")),
@@ -214,8 +217,11 @@ class SettingsStore:
             saved.bot_token = env_seed.bot_token
         if not saved.allowed_user_ids:
             saved.allowed_user_ids = env_seed.allowed_user_ids
-        if not saved.admin_password_hash:
+        if env_seed.admin_password_from_env:
             saved.admin_password_hash = env_seed.admin_password_hash
+        elif not saved.admin_password_hash:
+            saved.admin_password_hash = env_seed.admin_password_hash
+        saved.admin_password_from_env = False
         saved.config_dir = env_seed.config_dir
         self._settings = saved
 

@@ -71,7 +71,7 @@ Linux/macOS 可把 `"%cd%"` 换成 `"$(pwd)"`。
 当前 `docker-compose.yml` 默认使用 GitHub Actions 构建好的版本化镜像：
 
 ```text
-ghcr.io/ccawmiku/telethon-bot-token-mtproto:v1.2
+ghcr.io/ccawmiku/telethon-bot-token-mtproto:v1.3
 ```
 
 部署前创建挂载目录：
@@ -92,13 +92,13 @@ docker compose up -d
 仓库包含 `.github/workflows/docker-image.yml`。推送 `v*` 版本标签后，会构建并推送镜像到 GitHub Container Registry。发布新版本时需要递增版本号，例如 `v1.1`、`v1.2`：
 
 ```text
-ghcr.io/ccawmiku/telethon-bot-token-mtproto:v1.2
+ghcr.io/ccawmiku/telethon-bot-token-mtproto:v1.3
 ```
 
 拉取镜像：
 
 ```bash
-docker pull ghcr.io/ccawmiku/telethon-bot-token-mtproto:v1.2
+docker pull ghcr.io/ccawmiku/telethon-bot-token-mtproto:v1.3
 ```
 
 如果仓库或 package 是私有的，需要先登录 GHCR：
@@ -156,3 +156,12 @@ docker compose restart
 ```
 
 如果你在 Compose 或面板环境变量里设置过 `ADMIN_PASSWORD`，也要先删掉这个环境变量。
+
+从 `v1.3` 开始，如果容器里明确传入了 `ADMIN_PASSWORD`，它会覆盖已保存的控制台密码。注意必须把环境变量传进容器，只在宿主机 shell 里设置通常不会被已经运行的 Compose 容器读取。例如：
+
+```yaml
+services:
+  telethon-media-bot:
+    environment:
+      ADMIN_PASSWORD: "你的新密码"
+```
