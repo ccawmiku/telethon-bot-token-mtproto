@@ -1,6 +1,6 @@
 services:
   telethon-media-bot:
-    image: ghcr.io/ccawmiku/telethon-bot-token-mtproto:latest
+    image: ghcr.io/ccawmiku/telethon-bot-token-mtproto:v1.1
     container_name: telethon-media-bot
     restart: unless-stopped
     ports:

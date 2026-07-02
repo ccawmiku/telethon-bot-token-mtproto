@@ -47,7 +47,7 @@ docker compose logs -f
 ## 直接构建镜像
 
 ```bash
-docker build -t telethon-media-bot:latest .
+docker build -t telethon-media-bot:local .
 ```
 
 运行：
@@ -61,17 +61,17 @@ docker run -d --name telethon-media-bot \
   -v "%cd%/files:/downloads/files" \
   -v "%cd%/sessions:/sessions" \
   -v "%cd%/config:/config" \
-  telethon-media-bot:latest
+  telethon-media-bot:local
 ```
 
 Linux/macOS 可把 `"%cd%"` 换成 `"$(pwd)"`。
 
 ## 使用已发布镜像
 
-当前 `docker-compose.yml` 默认使用 GitHub Actions 构建好的镜像：
+当前 `docker-compose.yml` 默认使用 GitHub Actions 构建好的版本化镜像：
 
 ```text
-ghcr.io/ccawmiku/telethon-bot-token-mtproto:latest
+ghcr.io/ccawmiku/telethon-bot-token-mtproto:v1.1
 ```
 
 部署前创建挂载目录：
@@ -89,16 +89,16 @@ docker compose up -d
 
 ## GitHub Actions 构建镜像
 
-仓库包含 `.github/workflows/docker-image.yml`。推送到 `main` 或在 GitHub Actions 页面手动运行 `Docker Image` 后，会构建并推送镜像到 GitHub Container Registry：
+仓库包含 `.github/workflows/docker-image.yml`。推送 `v*` 版本标签后，会构建并推送镜像到 GitHub Container Registry。发布新版本时需要递增版本号，例如 `v1.1`、`v1.2`：
 
 ```text
-ghcr.io/ccawmiku/telethon-bot-token-mtproto:latest
+ghcr.io/ccawmiku/telethon-bot-token-mtproto:v1.1
 ```
 
 拉取镜像：
 
 ```bash
-docker pull ghcr.io/ccawmiku/telethon-bot-token-mtproto:latest
+docker pull ghcr.io/ccawmiku/telethon-bot-token-mtproto:v1.1
 ```
 
 如果仓库或 package 是私有的，需要先登录 GHCR：
