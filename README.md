@@ -71,7 +71,7 @@ Linux/macOS 可把 `"%cd%"` 换成 `"$(pwd)"`。
 当前 `docker-compose.yml` 默认使用 GitHub Actions 构建好的版本化镜像：
 
 ```text
-ghcr.io/ccawmiku/telethon-bot-token-mtproto:v1.3
+ghcr.io/ccawmiku/telethon-bot-token-mtproto:v1.4
 ```
 
 部署前创建挂载目录：
@@ -92,13 +92,13 @@ docker compose up -d
 仓库包含 `.github/workflows/docker-image.yml`。推送 `v*` 版本标签后，会构建并推送镜像到 GitHub Container Registry。发布新版本时需要递增版本号，例如 `v1.1`、`v1.2`：
 
 ```text
-ghcr.io/ccawmiku/telethon-bot-token-mtproto:v1.3
+ghcr.io/ccawmiku/telethon-bot-token-mtproto:v1.4
 ```
 
 拉取镜像：
 
 ```bash
-docker pull ghcr.io/ccawmiku/telethon-bot-token-mtproto:v1.3
+docker pull ghcr.io/ccawmiku/telethon-bot-token-mtproto:v1.4
 ```
 
 如果仓库或 package 是私有的，需要先登录 GHCR：
