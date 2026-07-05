@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from app.config import Settings, SettingsStore, hash_password, parse_user_ids, verify_password
+from app.bot import parse_delay_hours, parse_limit_mb, progress_bar
 from app.file_naming import sanitize_filename
 
 
@@ -66,3 +67,11 @@ def test_env_password_overrides_saved_password(tmp_path):
 
     assert verify_password("new-password", store.settings.admin_password_hash)
     assert not verify_password("old-password", store.settings.admin_password_hash)
+
+
+def test_progress_bar_and_runtime_command_parsing():
+    assert progress_bar(50, width=10) == "[#####-----]"
+    assert parse_limit_mb("/limit 0.5") == 1.0
+    assert parse_limit_mb("/limit 2m") == 2.0
+    assert parse_delay_hours("/delay 15") == 12.0
+    assert parse_delay_hours("/delay 0") is None

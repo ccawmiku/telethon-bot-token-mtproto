@@ -94,12 +94,13 @@ def require_panel_auth(request: Request) -> None:
 async def startup() -> None:
     current = settings_store.settings
     current.ensure_dirs()
-    if current.ready and os.getenv("AUTO_START_BOT", "false").lower() in {"1", "true", "yes"}:
+    auto_start = os.getenv("AUTO_START_BOT", "true").lower() not in {"0", "false", "no"}
+    if current.ready and auto_start:
         try:
             await bot_manager.start(current)
         except Exception as exc:
             bot_manager.last_error = f"{type(exc).__name__}: {exc}"
-            logger.exception("Bot auto-start failed")
+            logger.exception("Bot 自动启动失败")
 
 
 @app.on_event("shutdown")
@@ -175,8 +176,14 @@ async def save_settings(request: Request, payload: dict[str, Any]):
     was_running = bot_manager.running
     current = settings_store.save(payload)
     current.ensure_dirs()
-    if was_running:
-        await bot_manager.restart(current)
+    if current.ready:
+        try:
+            if was_running:
+                await bot_manager.restart(current)
+            else:
+                await bot_manager.start(current)
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"settings": current.public_dict(), "bot": bot_manager.state()}
 
 

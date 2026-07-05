@@ -1,15 +1,16 @@
 # Telethon Media Downloader Bot
 
-带中文网页控制面板的 Telegram 媒体下载 bot。容器启动后先打开 Web 面板填写 `API_ID`、`API_HASH`、`BOT_TOKEN`、允许用户 ID 和控制台密码，再启动 bot。你把图片、视频或文件发给 bot 后，bot 会在 Telegram 里返回排队、下载进度、完成或失败状态，同时控制面板会显示下载记录、文件列表和运行日志。
+带中文网页控制面板的 Telegram 媒体下载 bot。容器启动后先打开 Web 面板填写 `API_ID`、`API_HASH`、`BOT_TOKEN`、允许用户 ID 和控制台密码，保存后 bot 会自动启动。你把图片、视频或文件发给 bot 后，bot 会在 Telegram 里返回排队、进度条、完成或失败状态，同时控制面板会显示下载记录、文件列表和运行日志。
 
 ## 功能
 
 - Web 控制面板填写和保存 Telegram 参数。
 - 控制面板密码登录。
 - Telegram 用户 ID 白名单，未授权用户不能触发下载。
-- 从网页启动、停止、重启 bot。
+- 配置完整时自动启动 bot，也可从网页启动、停止、重启。
 - 使用 Telethon、Bot Token 和 MTProto 下载用户发给 bot 的图片、视频和文件。
-- Telegram 消息内返回下载状态；相册或一组多图会合并成一条完成汇总。
+- Telegram 消息内返回下载状态和进度条；相册或一组多图会合并成一条进度和完成汇总。
+- Telegram 命令支持 `/help`、`/limit x` 和 `/delay x`。
 - 控制面板显示 bot 状态、下载记录、进度、错误、已保存文件和运行日志。
 - 自动清洗文件名，重名时追加时间戳和短 UUID，避免覆盖。
 - Docker Compose 一键运行。
@@ -32,11 +33,31 @@ docker compose up -d
 http://localhost:8000
 ```
 
-在网页里填写 `API_ID`、`API_HASH`、`BOT_TOKEN`、允许用户 ID 和控制台密码，点击 `保存设置`，再点击 `启动`。
+在网页里填写 `API_ID`、`API_HASH`、`BOT_TOKEN`、允许用户 ID 和控制台密码，点击 `保存设置`。配置完整后 bot 会自动启动。
 
 如果不知道自己的 Telegram 用户 ID，可以先不给“允许用户 ID”填值，启动 bot 后给 bot 发任意消息。bot 会回复你的用户 ID。把这个 ID 填回控制面板并保存后，bot 才会处理下载。
 
 图片保存在宿主机的 `/opt/telethon-media-bot/images`，视频保存在 `/opt/telethon-media-bot/videos`，其他文件保存在 `/opt/telethon-media-bot/files`。Telethon session 保存在 `/opt/telethon-media-bot/sessions`，网页保存的配置和下载记录保存在 `/opt/telethon-media-bot/config`。
+
+## Bot 命令
+
+```text
+/help
+```
+
+显示可用命令、当前限速和暂停剩余时间。
+
+```text
+/limit x
+```
+
+设置全局下载限速为 `x MB/s`，最小 `1 MB/s`。例如 `/limit 2`。
+
+```text
+/delay x
+```
+
+暂停当前下载和后续下载 `x` 小时，到时间自动继续，最长 `12` 小时。支持小数，例如 `/delay 1.5`。
 
 查看日志：
 
@@ -71,7 +92,7 @@ Linux/macOS 可把 `"%cd%"` 换成 `"$(pwd)"`。
 当前 `docker-compose.yml` 默认使用 GitHub Actions 构建好的版本化镜像：
 
 ```text
-ghcr.io/ccawmiku/telethon-bot-token-mtproto:v1.4
+ghcr.io/ccawmiku/telethon-bot-token-mtproto:v1.5
 ```
 
 部署前创建挂载目录：
@@ -92,13 +113,13 @@ docker compose up -d
 仓库包含 `.github/workflows/docker-image.yml`。推送 `v*` 版本标签后，会构建并推送镜像到 GitHub Container Registry。发布新版本时需要递增版本号，例如 `v1.1`、`v1.2`：
 
 ```text
-ghcr.io/ccawmiku/telethon-bot-token-mtproto:v1.4
+ghcr.io/ccawmiku/telethon-bot-token-mtproto:v1.5
 ```
 
 拉取镜像：
 
 ```bash
-docker pull ghcr.io/ccawmiku/telethon-bot-token-mtproto:v1.4
+docker pull ghcr.io/ccawmiku/telethon-bot-token-mtproto:v1.5
 ```
 
 如果仓库或 package 是私有的，需要先登录 GHCR：
@@ -109,7 +130,7 @@ echo YOUR_GITHUB_TOKEN | docker login ghcr.io -u YOUR_GITHUB_USERNAME --password
 
 ## 通过环境变量预填配置
 
-也可以复制 `.env.example` 为 `.env`，然后用 `docker run --env-file .env` 或自行在 Compose 中加入环境变量。设置 `AUTO_START_BOT=true` 后，如果参数完整，服务启动时会自动启动 bot。
+也可以复制 `.env.example` 为 `.env`，然后用 `docker run --env-file .env` 或自行在 Compose 中加入环境变量。默认情况下，如果参数完整，服务启动时会自动启动 bot；设置 `AUTO_START_BOT=false` 可以禁用自动启动。
 
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
@@ -128,7 +149,7 @@ echo YOUR_GITHUB_TOKEN | docker login ghcr.io -u YOUR_GITHUB_USERNAME --password
 | `PROGRESS_INTERVAL_SECONDS` | `3` | Telegram 状态消息最短更新间隔 |
 | `PROGRESS_PERCENT_STEP` | `10` | 至少变化多少百分比才更新 |
 | `MAX_FILENAME_STEM_LENGTH` | `120` | 文件主名最大长度 |
-| `AUTO_START_BOT` | `false` | 参数完整时是否自动启动 bot |
+| `AUTO_START_BOT` | `true` | 参数完整时是否自动启动 bot |
 | `WEB_PORT` | `8000` | Web 服务端口 |
 
 ## 注意
