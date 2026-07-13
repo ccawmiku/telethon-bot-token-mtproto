@@ -1,10 +1,10 @@
 services:
   telethon-media-bot:
-    image: ghcr.io/ccawmiku/telethon-bot-token-mtproto:v1.5
+    image: ghcr.io/ccawmiku/telethon-bot-token-mtproto:v1.6
     container_name: telethon-media-bot
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     volumes:
       - /opt/telethon-media-bot/images:/downloads/images
       - /opt/telethon-media-bot/videos:/downloads/videos

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import mimetypes
+import os
 import re
 import uuid
 from datetime import datetime, timezone
@@ -78,15 +79,23 @@ def unique_media_path(message: Message, download_dir: Path, max_stem_length: int
         max_stem_length=max_stem_length,
     )
     candidate = download_dir / candidate_name
-    if not candidate.exists():
-        return candidate
-
     suffix = candidate.suffix
     stem = candidate.stem
-    for _ in range(100):
-        unique = download_dir / f"{stem}_{timestamp}_{uuid.uuid4().hex[:8]}{suffix}"
-        if not unique.exists():
-            return unique
 
-    return download_dir / f"{stem}_{timestamp}_{uuid.uuid4().hex}{suffix}"
+    for attempt in range(101):
+        target = candidate if attempt == 0 else (
+            download_dir / f"{stem}_{timestamp}_{message_id}_{uuid.uuid4().hex[:8]}{suffix}"
+        )
+        try:
+            descriptor = os.open(target, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        except FileExistsError:
+            continue
+        else:
+            os.close(descriptor)
+            return target
+
+    target = download_dir / f"{stem}_{timestamp}_{message_id}_{uuid.uuid4().hex}{suffix}"
+    descriptor = os.open(target, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    os.close(descriptor)
+    return target
 

@@ -169,6 +169,10 @@
       button.primary:hover { background: var(--accent-strong); }
       button.danger { color: var(--danger); }
       button:disabled { opacity: 0.55; cursor: not-allowed; }
+      button.small { min-height: 30px; padding: 0 9px; font-size: 12px; }
+      .subline { margin-top: 5px; color: var(--muted); font-size: 12px; line-height: 1.45; }
+      .transfer { min-width: 145px; }
+      .progress-label { margin-top: 5px; color: var(--muted); font-size: 12px; white-space: nowrap; }
 
       .tabs {
         display: flex;
@@ -227,8 +231,9 @@
       }
 
       .badge.complete { background: #dcfce7; color: var(--ok); }
-      .badge.downloading, .badge.queued { background: #fef3c7; color: var(--warn); }
-      .badge.failed { background: #fee4e2; color: var(--danger); }
+      .badge.downloading, .badge.queued, .badge.retrying, .badge.verifying { background: #fef3c7; color: var(--warn); }
+      .badge.paused { background: #e0e7ff; color: #4338ca; }
+      .badge.failed, .badge.interrupted, .badge.cancelled { background: #fee4e2; color: var(--danger); }
       .badge.running { background: #ccfbf1; color: var(--accent-strong); }
 
       .progress {
@@ -324,6 +329,7 @@
           <input id="loginPassword" type="password" autocomplete="current-password" />
         </label>
         <button class="primary" type="submit">登录</button>
+        <div id="bootstrapHint" class="muted hidden">首次启动请使用容器日志中的“一次性初始化口令”登录，然后立即设置控制台密码。</div>
         <div id="loginMessage" class="muted"></div>
       </form>
     </div>
@@ -335,6 +341,8 @@
           <button id="startBtn" class="primary">启动</button>
           <button id="restartBtn">重启</button>
           <button id="stopBtn" class="danger">停止</button>
+          <button id="resumeBtn">恢复下载</button>
+          <button id="limitOffBtn">取消限速</button>
           <button id="logoutBtn">退出</button>
         </div>
       </div>
@@ -381,6 +389,10 @@
               <input id="allowedUserIds" name="allowed_user_ids" autocomplete="off" placeholder="多个 ID 用逗号分隔" />
             </label>
             <label class="field">
+              <span>管理员用户 ID</span>
+              <input id="adminUserIds" name="admin_user_ids" autocomplete="off" placeholder="留空时允许用户均为管理员" />
+            </label>
+            <label class="field">
               <span>控制台密码</span>
               <input id="adminPassword" name="admin_password" type="password" autocomplete="new-password" placeholder="留空表示不修改密码" />
             </label>
@@ -405,12 +417,28 @@
               <input id="sessionDir" name="session_dir" />
             </label>
             <label class="field">
+              <span>Session 名称</span>
+              <input id="sessionName" name="session_name" pattern="[A-Za-z0-9_.-]+" />
+            </label>
+            <label class="field">
               <span>进度更新间隔秒数</span>
               <input id="progressInterval" name="progress_interval_seconds" type="number" min="1" step="1" />
             </label>
             <label class="field">
               <span>进度更新百分比步长</span>
               <input id="progressStep" name="progress_percent_step" type="number" min="1" max="100" step="1" />
+            </label>
+            <label class="field">
+              <span>自动重试次数</span>
+              <input id="maxAutoRetries" name="max_auto_retries" type="number" min="0" max="10" step="1" />
+            </label>
+            <label class="field">
+              <span>最大排队数量</span>
+              <input id="queueMaxsize" name="queue_maxsize" type="number" min="1" max="1000" step="1" />
+            </label>
+            <label class="field">
+              <span>历史落盘间隔秒数</span>
+              <input id="historyFlushInterval" name="history_flush_interval_seconds" type="number" min="0.5" max="60" step="0.5" />
             </label>
             <div class="actions">
               <button class="primary" type="submit">保存设置</button>
@@ -424,6 +452,7 @@
             <button class="tab active" data-tab="downloads" type="button">下载记录</button>
             <button class="tab" data-tab="files" type="button">文件</button>
             <button class="tab" data-tab="logs" type="button">日志</button>
+            <button id="cleanupBtn" class="small danger" type="button">清理失败/中断记录</button>
           </div>
 
           <div id="downloadsTab" class="table-wrap">
@@ -433,8 +462,9 @@
                   <th>状态</th>
                   <th>文件</th>
                   <th>进度</th>
-                  <th>大小</th>
+                  <th>传输</th>
                   <th>更新时间</th>
+                  <th>操作</th>
                 </tr>
               </thead>
               <tbody id="downloadsBody"></tbody>
@@ -463,283 +493,6 @@
       </section>
     </main>
 
-    <script>
-      const els = {
-        botStatus: document.querySelector("#botStatus"),
-        botUser: document.querySelector("#botUser"),
-        downloadCount: document.querySelector("#downloadCount"),
-        fileCount: document.querySelector("#fileCount"),
-        downloadsBody: document.querySelector("#downloadsBody"),
-        filesBody: document.querySelector("#filesBody"),
-        logsBody: document.querySelector("#logsBody"),
-        form: document.querySelector("#settingsForm"),
-        loginOverlay: document.querySelector("#loginOverlay"),
-        loginForm: document.querySelector("#loginForm"),
-        loginPassword: document.querySelector("#loginPassword"),
-        loginMessage: document.querySelector("#loginMessage"),
-        formMessage: document.querySelector("#formMessage"),
-        startBtn: document.querySelector("#startBtn"),
-        restartBtn: document.querySelector("#restartBtn"),
-        stopBtn: document.querySelector("#stopBtn"),
-        logoutBtn: document.querySelector("#logoutBtn"),
-        apiId: document.querySelector("#apiId"),
-        apiHash: document.querySelector("#apiHash"),
-        botToken: document.querySelector("#botToken"),
-        allowedUserIds: document.querySelector("#allowedUserIds"),
-        adminPassword: document.querySelector("#adminPassword"),
-        downloadDir: document.querySelector("#downloadDir"),
-        imageDownloadDir: document.querySelector("#imageDownloadDir"),
-        videoDownloadDir: document.querySelector("#videoDownloadDir"),
-        fileDownloadDir: document.querySelector("#fileDownloadDir"),
-        sessionDir: document.querySelector("#sessionDir"),
-        progressInterval: document.querySelector("#progressInterval"),
-        progressStep: document.querySelector("#progressStep")
-      };
-
-      let firstLoad = true;
-      let authenticated = false;
-
-      function formatBytes(value) {
-        if (!value) return "0 B";
-        const units = ["B", "KB", "MB", "GB", "TB"];
-        let size = Number(value);
-        let index = 0;
-        while (size >= 1024 && index < units.length - 1) {
-          size /= 1024;
-          index += 1;
-        }
-        return index === 0 ? `${size} B` : `${size.toFixed(1)} ${units[index]}`;
-      }
-
-      function formatTime(value) {
-        if (!value) return "-";
-        if (typeof value === "number") return new Date(value * 1000).toLocaleString();
-        return new Date(value).toLocaleString();
-      }
-
-      function escapeHtml(value) {
-        return String(value ?? "")
-          .replaceAll("&", "&amp;")
-          .replaceAll("<", "&lt;")
-          .replaceAll(">", "&gt;")
-          .replaceAll('"', "&quot;")
-          .replaceAll("'", "&#039;");
-      }
-
-      async function postJson(url, payload = {}) {
-        const response = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
-        if (!response.ok) {
-          const data = await response.json().catch(() => ({}));
-          throw new Error(data.detail || response.statusText);
-        }
-        return response.json();
-      }
-
-      function statusText(value) {
-        return {
-          queued: "排队中",
-          downloading: "下载中",
-          complete: "完成",
-          failed: "失败"
-        }[value] || value;
-      }
-
-      function categoryText(value) {
-        return {
-          images: "图片",
-          videos: "视频",
-          files: "其他"
-        }[value] || value;
-      }
-
-      async function checkAuth() {
-        const state = await fetch("/api/auth/status").then((res) => res.json());
-        authenticated = state.authenticated;
-        els.loginOverlay.classList.toggle("hidden", authenticated);
-        return state;
-      }
-
-      function fillSettings(settings) {
-        if (!firstLoad) return;
-        els.apiId.value = settings.api_id || "";
-        els.allowedUserIds.value = (settings.allowed_user_ids || []).join(", ");
-        els.downloadDir.value = settings.download_dir || "/downloads";
-        els.imageDownloadDir.value = settings.image_download_dir || "/downloads/images";
-        els.videoDownloadDir.value = settings.video_download_dir || "/downloads/videos";
-        els.fileDownloadDir.value = settings.file_download_dir || "/downloads/files";
-        els.sessionDir.value = settings.session_dir || "/sessions";
-        els.progressInterval.value = settings.progress_interval_seconds || 3;
-        els.progressStep.value = settings.progress_percent_step || 10;
-        if (settings.api_hash_set) els.apiHash.placeholder = "已保存，留空表示不修改";
-        if (settings.bot_token_set) els.botToken.placeholder = "已保存，留空表示不修改";
-      }
-
-      function renderDownloads(downloads) {
-        els.downloadsBody.innerHTML = downloads.map((item) => `
-          <tr>
-            <td><span class="badge ${escapeHtml(item.status)}">${escapeHtml(statusText(item.status))}</span></td>
-            <td><div class="file-name" title="${escapeHtml(item.file_name)}">${escapeHtml(item.file_name)}</div>${item.error ? `<div class="muted">${escapeHtml(item.error)}</div>` : ""}</td>
-            <td><div class="progress"><div style="width:${item.progress || 0}%"></div></div></td>
-            <td>${formatBytes(item.size_bytes || item.total_bytes)}</td>
-            <td>${formatTime(item.updated_at)}</td>
-          </tr>
-        `).join("") || `<tr><td colspan="5" class="muted">暂无下载记录</td></tr>`;
-      }
-
-      function renderFiles(files) {
-        els.filesBody.innerHTML = files.map((item) => `
-          <tr>
-            <td><div class="file-name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</div></td>
-            <td><span class="badge">${escapeHtml(categoryText(item.category))}</span></td>
-            <td>${formatBytes(item.size_bytes)}</td>
-            <td>${formatTime(item.modified_at)}</td>
-            <td><a href="/files/${encodeURIComponent(item.category)}/${encodeURIComponent(item.name)}">下载</a></td>
-          </tr>
-        `).join("") || `<tr><td colspan="5" class="muted">暂无文件</td></tr>`;
-      }
-
-      function renderLogs(logs) {
-        els.logsBody.innerHTML = logs.map((item) => `
-          <div class="log-row">
-            <div class="muted">${formatTime(item.time)}</div>
-            <div><span class="badge">${escapeHtml(item.level)}</span></div>
-            <div class="log-message">${escapeHtml(item.message)}</div>
-          </div>
-        `).join("") || `<div class="muted">暂无日志</div>`;
-      }
-
-      async function refresh() {
-        if (!authenticated) return;
-        const state = await fetch("/api/state").then((res) => res.json());
-        const running = state.bot.running;
-        els.botStatus.innerHTML = running ? `<span class="badge running">运行中</span>` : `<span class="badge">已停止</span>`;
-        els.botUser.textContent = state.bot.username ? `@${state.bot.username}` : "-";
-        els.downloadCount.textContent = state.downloads.length;
-        els.fileCount.textContent = state.files.length;
-        els.startBtn.disabled = running || !state.settings.ready;
-        els.restartBtn.disabled = !state.settings.ready;
-        els.stopBtn.disabled = !running;
-        fillSettings(state.settings);
-        renderDownloads(state.downloads);
-        renderFiles(state.files);
-        if (state.bot.last_error) els.formMessage.textContent = state.bot.last_error;
-        firstLoad = false;
-      }
-
-      async function refreshLogs() {
-        if (!authenticated) return;
-        const data = await fetch("/api/logs").then((res) => res.json());
-        renderLogs(data.logs || []);
-      }
-
-      els.loginForm.addEventListener("submit", async (event) => {
-        event.preventDefault();
-        els.loginMessage.textContent = "正在登录...";
-        try {
-          await postJson("/api/auth/login", { password: els.loginPassword.value });
-          els.loginPassword.value = "";
-          els.loginMessage.textContent = "";
-          await checkAuth();
-          await refresh();
-          await refreshLogs();
-        } catch (error) {
-          els.loginMessage.textContent = error.message;
-          els.loginMessage.classList.add("error");
-        }
-      });
-
-      els.form.addEventListener("submit", async (event) => {
-        event.preventDefault();
-        els.formMessage.textContent = "正在保存...";
-        const newAdminPassword = els.adminPassword.value;
-        const payload = {
-          api_id: els.apiId.value.trim() || null,
-          api_hash: els.apiHash.value.trim(),
-          bot_token: els.botToken.value.trim(),
-          allowed_user_ids: els.allowedUserIds.value.trim(),
-          admin_password: newAdminPassword,
-          download_dir: els.downloadDir.value.trim() || "/downloads",
-          image_download_dir: els.imageDownloadDir.value.trim() || "/downloads/images",
-          video_download_dir: els.videoDownloadDir.value.trim() || "/downloads/videos",
-          file_download_dir: els.fileDownloadDir.value.trim() || "/downloads/files",
-          session_dir: els.sessionDir.value.trim() || "/sessions",
-          progress_interval_seconds: Number(els.progressInterval.value || 3),
-          progress_percent_step: Number(els.progressStep.value || 10)
-        };
-        try {
-          await postJson("/api/settings", payload);
-          if (newAdminPassword) {
-            await postJson("/api/auth/login", { password: newAdminPassword });
-          }
-          els.apiHash.value = "";
-          els.botToken.value = "";
-          els.adminPassword.value = "";
-          firstLoad = true;
-          els.formMessage.textContent = "已保存";
-          await refresh();
-        } catch (error) {
-          els.formMessage.textContent = error.message;
-        }
-      });
-
-      els.startBtn.addEventListener("click", async () => {
-        els.formMessage.textContent = "正在启动...";
-        try {
-          await postJson("/api/bot/start");
-          els.formMessage.textContent = "已启动";
-          await refresh();
-        } catch (error) {
-          els.formMessage.textContent = error.message;
-        }
-      });
-
-      els.restartBtn.addEventListener("click", async () => {
-        els.formMessage.textContent = "正在重启...";
-        try {
-          await postJson("/api/bot/restart");
-          els.formMessage.textContent = "已重启";
-          await refresh();
-        } catch (error) {
-          els.formMessage.textContent = error.message;
-        }
-      });
-
-      els.stopBtn.addEventListener("click", async () => {
-        els.formMessage.textContent = "正在停止...";
-        await postJson("/api/bot/stop");
-        els.formMessage.textContent = "已停止";
-        await refresh();
-      });
-
-      els.logoutBtn.addEventListener("click", async () => {
-        await postJson("/api/auth/logout");
-        authenticated = false;
-        firstLoad = true;
-        els.loginOverlay.classList.remove("hidden");
-      });
-
-      document.querySelectorAll(".tab").forEach((tab) => {
-        tab.addEventListener("click", () => {
-          document.querySelectorAll(".tab").forEach((item) => item.classList.remove("active"));
-          tab.classList.add("active");
-          const target = tab.dataset.tab;
-          document.querySelector("#downloadsTab").classList.toggle("hidden", target !== "downloads");
-          document.querySelector("#filesTab").classList.toggle("hidden", target !== "files");
-          document.querySelector("#logsTab").classList.toggle("hidden", target !== "logs");
-          if (target === "logs") refreshLogs();
-        });
-      });
-
-      checkAuth().then(() => {
-        refresh();
-        refreshLogs();
-      });
-      setInterval(refresh, 3000);
-      setInterval(refreshLogs, 5000);
-    </script>
+    <script src="/static/app.js"></script>
   </body>
 </html>

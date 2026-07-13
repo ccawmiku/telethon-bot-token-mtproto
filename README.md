@@ -1,104 +1,35 @@
 # Telethon Media Downloader Bot
 
-带中文网页控制面板的 Telegram 媒体下载 bot。容器启动后先打开 Web 面板填写 `API_ID`、`API_HASH`、`BOT_TOKEN`、允许用户 ID 和控制台密码，保存后 bot 会自动启动。你把图片、视频或文件发给 bot 后，bot 会在 Telegram 里返回排队、进度条、完成或失败状态，同时控制面板会显示下载记录、文件列表和运行日志。
+使用 Bot Token 和 MTProto 下载 Telegram 图片、视频及文件，提供中文 Web 控制台、用户白名单、有界下载队列、实时进度、自动重试和运行时控制。
 
-## 功能
+当前版本：`v1.6`
 
-- Web 控制面板填写和保存 Telegram 参数。
-- 控制面板密码登录。
-- Telegram 用户 ID 白名单，未授权用户不能触发下载。
-- 配置完整时自动启动 bot，也可从网页启动、停止、重启。
-- 使用 Telethon、Bot Token 和 MTProto 下载用户发给 bot 的图片、视频和文件。
-- Telegram 消息内返回下载状态和进度条；相册或一组多图会合并成一条进度和完成汇总。
-- Telegram 命令支持 `/help`、`/limit x` 和 `/delay x`。
-- 控制面板显示 bot 状态、下载记录、进度、错误、已保存文件和运行日志。
-- 自动清洗文件名，重名时追加时间戳和短 UUID，避免覆盖。
-- Docker Compose 一键运行。
+## v1.6 主要能力
+
+- 下载失败后自动重试最多 3 次，采用 2、4、8 秒指数退避。
+- 显式有界队列，默认最多排队 100 个任务，单 worker 避免无界协程堆积。
+- 状态包括排队、下载、暂停、重试、校验、完成、失败、中断和取消。
+- Web 和 Telegram 同时显示百分比、已下载/总大小、速度、ETA、限速和重试次数。
+- 服务重启时自动校正遗留的“下载中”记录；完整文件恢复为完成，其余标为中断。
+- 同名文件通过原子预占避免并发覆盖，下载先写隐藏临时文件，完成后原子替换。
+- 下载历史按间隔节流落盘；设置和历史均使用临时文件加 `os.replace()` 原子保存。
+- 相册创建串行化，避免同一相册生成多个批次状态。
+- 控制台强制登录；首次启动使用一次性初始化口令，不再默认公开。
+- 登录失败限制、安全 Cookie 配置、CSP 和常用安全响应头。
+- 区分允许用户与管理员用户；危险命令仅管理员可用。
+- CI 自动执行编译、Ruff、测试、`pip-audit`、镜像构建和 Trivy 漏洞扫描。
 
 ## 获取 Telegram 参数
 
-1. 到 <https://my.telegram.org> 创建应用，获取 `API_ID` 和 `API_HASH`。
-2. 到 Telegram 找 `@BotFather` 创建 bot，获取 `BOT_TOKEN`。
+1. 在 <https://my.telegram.org> 创建应用，获取 `API_ID` 和 `API_HASH`。
+2. 在 Telegram 中通过 `@BotFather` 创建 bot，获取 `BOT_TOKEN`。
 
-## Docker Compose 运行
+## Docker Compose 部署
 
-```bash
-docker compose pull
-docker compose up -d
-```
-
-打开控制面板：
-
-```text
-http://localhost:8000
-```
-
-在网页里填写 `API_ID`、`API_HASH`、`BOT_TOKEN`、允许用户 ID 和控制台密码，点击 `保存设置`。配置完整后 bot 会自动启动。
-
-如果不知道自己的 Telegram 用户 ID，可以先不给“允许用户 ID”填值，启动 bot 后给 bot 发任意消息。bot 会回复你的用户 ID。把这个 ID 填回控制面板并保存后，bot 才会处理下载。
-
-图片保存在宿主机的 `/opt/telethon-media-bot/images`，视频保存在 `/opt/telethon-media-bot/videos`，其他文件保存在 `/opt/telethon-media-bot/files`。Telethon session 保存在 `/opt/telethon-media-bot/sessions`，网页保存的配置和下载记录保存在 `/opt/telethon-media-bot/config`。
-
-## Bot 命令
-
-```text
-/help
-```
-
-显示可用命令、当前限速和暂停剩余时间。
-
-```text
-/limit x
-```
-
-设置全局下载限速为 `x MB/s`，最小 `1 MB/s`。例如 `/limit 2`。
-
-```text
-/delay x
-```
-
-暂停当前下载和后续下载 `x` 小时，到时间自动继续，最长 `12` 小时。支持小数，例如 `/delay 1.5`。
-
-查看日志：
+创建持久化目录：
 
 ```bash
-docker compose logs -f
-```
-
-## 直接构建镜像
-
-```bash
-docker build -t telethon-media-bot:local .
-```
-
-运行：
-
-```bash
-docker run -d --name telethon-media-bot \
-  --restart unless-stopped \
-  -p 8000:8000 \
-  -v "%cd%/images:/downloads/images" \
-  -v "%cd%/videos:/downloads/videos" \
-  -v "%cd%/files:/downloads/files" \
-  -v "%cd%/sessions:/sessions" \
-  -v "%cd%/config:/config" \
-  telethon-media-bot:local
-```
-
-Linux/macOS 可把 `"%cd%"` 换成 `"$(pwd)"`。
-
-## 使用已发布镜像
-
-当前 `docker-compose.yml` 默认使用 GitHub Actions 构建好的版本化镜像：
-
-```text
-ghcr.io/ccawmiku/telethon-bot-token-mtproto:v1.5
-```
-
-部署前创建挂载目录：
-
-```bash
-sudo mkdir -p /opt/telethon-media-bot/images /opt/telethon-media-bot/videos /opt/telethon-media-bot/files /opt/telethon-media-bot/sessions /opt/telethon-media-bot/config
+sudo mkdir -p /opt/telethon-media-bot/{images,videos,files,sessions,config}
 ```
 
 启动：
@@ -108,81 +39,135 @@ docker compose pull
 docker compose up -d
 ```
 
-## GitHub Actions 构建镜像
-
-仓库包含 `.github/workflows/docker-image.yml`。推送 `v*` 版本标签后，会构建并推送镜像到 GitHub Container Registry。发布新版本时需要递增版本号，例如 `v1.1`、`v1.2`：
+出于安全考虑，Compose 默认只监听宿主机 `127.0.0.1:8000`。本机访问：
 
 ```text
-ghcr.io/ccawmiku/telethon-bot-token-mtproto:v1.5
+http://127.0.0.1:8000
 ```
 
-拉取镜像：
+远程服务器建议使用 SSH 隧道：
 
 ```bash
-docker pull ghcr.io/ccawmiku/telethon-bot-token-mtproto:v1.5
+ssh -L 8000:127.0.0.1:8000 user@server
 ```
 
-如果仓库或 package 是私有的，需要先登录 GHCR：
+### 首次登录
+
+如果没有通过 `ADMIN_PASSWORD` 设置密码，服务会在日志中生成一次性初始化口令：
 
 ```bash
-echo YOUR_GITHUB_TOKEN | docker login ghcr.io -u YOUR_GITHUB_USERNAME --password-stdin
+docker compose logs telethon-media-bot
 ```
 
-## 通过环境变量预填配置
-
-也可以复制 `.env.example` 为 `.env`，然后用 `docker run --env-file .env` 或自行在 Compose 中加入环境变量。默认情况下，如果参数完整，服务启动时会自动启动 bot；设置 `AUTO_START_BOT=false` 可以禁用自动启动。
-
-| 变量 | 默认值 | 说明 |
-| --- | --- | --- |
-| `API_ID` | 空 | Telegram app API ID |
-| `API_HASH` | 空 | Telegram app API Hash |
-| `BOT_TOKEN` | 空 | BotFather 生成的 token |
-| `ALLOWED_USER_IDS` | 空 | 允许使用 bot 的 Telegram 用户 ID，多个用逗号分隔 |
-| `ADMIN_PASSWORD` | 空 | 控制面板登录密码 |
-| `DOWNLOAD_DIR` | `/downloads` | 容器内下载目录 |
-| `IMAGE_DOWNLOAD_DIR` | `/downloads/images` | 容器内图片下载目录 |
-| `VIDEO_DOWNLOAD_DIR` | `/downloads/videos` | 容器内视频下载目录 |
-| `FILE_DOWNLOAD_DIR` | `/downloads/files` | 容器内其他文件下载目录 |
-| `SESSION_DIR` | `/sessions` | 容器内 session 目录 |
-| `CONFIG_DIR` | `/config` | 网页配置和下载记录目录 |
-| `SESSION_NAME` | `media_downloader_bot` | session 文件名 |
-| `PROGRESS_INTERVAL_SECONDS` | `3` | Telegram 状态消息最短更新间隔 |
-| `PROGRESS_PERCENT_STEP` | `10` | 至少变化多少百分比才更新 |
-| `MAX_FILENAME_STEM_LENGTH` | `120` | 文件主名最大长度 |
-| `AUTO_START_BOT` | `true` | 参数完整时是否自动启动 bot |
-| `WEB_PORT` | `8000` | Web 服务端口 |
-
-## 注意
-
-- 控制面板会保存 bot token，请不要把 `config/`、`.env`、`sessions/`、`images/`、`videos/`、`files/` 提交到 GitHub。
-- 如果把服务部署到公网，请放在反向代理认证或内网访问控制后面。
-- bot 默认只能接收用户主动发给它的消息。用于群组时，需要把 bot 拉入群组，并根据 BotFather 的隐私设置调整可见消息范围。
-
-## 重置控制台密码
-
-如果还没主动设置密码却看到登录页，通常是环境变量 `ADMIN_PASSWORD` 或旧配置已经写入了密码。可以删除配置文件里的 `admin_password_hash` 来重置，其他 bot 配置会保留：
-
-```bash
-sudo python3 - <<'PY'
-import json
-from pathlib import Path
-
-path = Path("/opt/telethon-media-bot/config/settings.json")
-data = json.loads(path.read_text(encoding="utf-8"))
-data.pop("admin_password_hash", None)
-path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-PY
-
-docker compose restart
-```
-
-如果你在 Compose 或面板环境变量里设置过 `ADMIN_PASSWORD`，也要先删掉这个环境变量。
-
-从 `v1.3` 开始，如果容器里明确传入了 `ADMIN_PASSWORD`，它会覆盖已保存的控制台密码。注意必须把环境变量传进容器，只在宿主机 shell 里设置通常不会被已经运行的 Compose 容器读取。例如：
+使用日志中的“一次性初始化口令”登录，然后在控制台立即设置至少 10 个字符的管理员密码。也可以在部署前通过环境变量设置固定密码或初始化口令：
 
 ```yaml
 services:
   telethon-media-bot:
     environment:
-      ADMIN_PASSWORD: "你的新密码"
+      ADMIN_PASSWORD: "请替换为强密码"
+      COOKIE_SECURE: "true"
 ```
+
+`COOKIE_SECURE=true` 只应在 HTTPS 反向代理后启用。需要从其他主机直接访问时，应由反向代理提供 TLS 和访问控制，不建议把容器端口直接暴露到公网。
+
+## Bot 命令
+
+所有允许用户可用：
+
+```text
+/help             显示帮助
+/status           当前任务、进度、速度、ETA、队列、暂停和限速
+/queue [n]        查看前 n 个队列任务
+/history [n]      查看最近记录
+/failed           查看失败、中断和取消的记录
+/storage          查看文件数量、占用和磁盘剩余空间
+/whoami           查看自己的 Telegram 用户 ID
+/version          查看版本和启动时间
+/ping             查看 Bot 响应延迟
+```
+
+管理员可用：
+
+```text
+/cancel current   取消当前下载
+/cancel all       取消全部当前和排队任务
+/cancel <任务ID>  取消指定任务
+/pause            无限期暂停
+/pause 30m        暂停 30 分钟，支持 s、m、h，最长 12 小时
+/resume           立即恢复
+/limit 2          限速 2 MB/s
+/limit off        取消限速
+/retry <任务ID>   重试指定失败/中断任务
+/retry failed     重试最近最多 10 个失败/中断任务
+/delay 1.5        兼容旧命令，暂停 1.5 小时
+```
+
+如果未填写 `ADMIN_USER_IDS`，所有 `ALLOWED_USER_IDS` 都视为管理员。填写后，只有管理员 ID 能执行取消、暂停、恢复、限速和重试命令。管理员 ID 即使未重复写入允许列表，也可以使用 bot。
+
+## Web 控制台
+
+控制台支持：
+
+- 启动、停止和重启 bot。
+- 恢复暂停、取消限速。
+- 查看队列状态、速度、ETA、限速和重试次数。
+- 取消当前或排队任务、重试失败任务、清理失败/中断历史。
+- 浏览并下载已保存文件。
+- 查看内存运行日志。
+
+## 环境变量
+
+| 变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `API_ID` | 空 | Telegram app API ID |
+| `API_HASH` | 空 | Telegram app API Hash |
+| `BOT_TOKEN` | 空 | BotFather token |
+| `ALLOWED_USER_IDS` | 空 | 允许使用 bot 的用户 ID，逗号分隔 |
+| `ADMIN_USER_IDS` | 空 | 管理员 ID；空时允许用户均为管理员 |
+| `ADMIN_PASSWORD` | 空 | 控制台密码；设置后覆盖保存的密码 |
+| `BOOTSTRAP_TOKEN` | 随机 | 未设置密码时的一次性初始化口令 |
+| `DOWNLOAD_DIR` | `/downloads` | 下载根目录 |
+| `IMAGE_DOWNLOAD_DIR` | `/downloads/images` | 图片目录 |
+| `VIDEO_DOWNLOAD_DIR` | `/downloads/videos` | 视频目录 |
+| `FILE_DOWNLOAD_DIR` | `/downloads/files` | 其他文件目录 |
+| `SESSION_DIR` | `/sessions` | Telethon session 目录 |
+| `CONFIG_DIR` | `/config` | 设置和历史目录 |
+| `SESSION_NAME` | `media_downloader_bot` | Session 名称，只允许字母、数字、点、下划线和连字符 |
+| `PROGRESS_INTERVAL_SECONDS` | `3` | Telegram 进度消息最短更新间隔 |
+| `PROGRESS_PERCENT_STEP` | `5` | 进度消息最小百分比变化 |
+| `MAX_FILENAME_STEM_LENGTH` | `120` | 文件主名最大长度 |
+| `MAX_AUTO_RETRIES` | `3` | 下载失败后的自动重试次数 |
+| `QUEUE_MAXSIZE` | `100` | 最大排队任务数 |
+| `HISTORY_FLUSH_INTERVAL_SECONDS` | `2` | 下载进度历史落盘间隔 |
+| `AUTO_START_BOT` | `true` | 配置完整时自动启动 |
+| `COOKIE_SECURE` | `false` | 为登录 Cookie 设置 Secure，仅用于 HTTPS |
+| `WEB_HOST` | `0.0.0.0` | 容器内监听地址 |
+| `WEB_PORT` | `8000` | Web 端口 |
+
+## 本地开发
+
+```bash
+python -m venv .venv
+.venv/bin/python -m pip install -r requirements-dev.txt
+.venv/bin/python -m ruff check app tests
+.venv/bin/python -m pytest -q
+.venv/bin/python -m pip_audit -r requirements.txt
+```
+
+Windows 使用 `.venv\Scripts\python.exe`。
+
+## 发布镜像
+
+推送 `v*` 标签后，GitHub Actions 会先运行测试和依赖审计，通过后构建并推送镜像，然后执行 Trivy 严重漏洞扫描：
+
+```text
+ghcr.io/ccawmiku/telethon-bot-token-mtproto:v1.6
+```
+
+## 数据安全
+
+- 不要提交 `.env`、`config/`、`sessions/` 或下载目录。
+- `settings.json` 包含 API Hash 和 Bot Token，文件会以 `0600` 权限原子写入。
+- 下载文件接口需要控制台登录，并对解析后的目标路径再次检查，防止目录穿越。
+- 配置验证或 Telegram 启动失败时，新设置不会提交，运行配置会回滚。

@@ -2,7 +2,7 @@ from pathlib import Path
 
 from app.config import Settings, SettingsStore, hash_password, parse_user_ids, verify_password
 from app.bot import parse_delay_hours, parse_limit_mb, progress_bar
-from app.file_naming import sanitize_filename
+from app.file_naming import sanitize_filename, unique_media_path
 
 
 def test_sanitize_filename_removes_unsafe_characters():
@@ -75,3 +75,20 @@ def test_progress_bar_and_runtime_command_parsing():
     assert parse_limit_mb("/limit 2m") == 2.0
     assert parse_delay_hours("/delay 15") == 12.0
     assert parse_delay_hours("/delay 0") is None
+
+
+def test_unique_media_path_reserves_names_atomically(tmp_path, monkeypatch):
+    message = type("Message", (), {"id": 42, "media": None, "document": None})()
+    monkeypatch.setattr("app.file_naming.original_media_name", lambda _: "same.pdf")
+
+    first = unique_media_path(message, tmp_path, 120)
+    second = unique_media_path(message, tmp_path, 120)
+
+    assert first != second
+    assert first.exists()
+    assert second.exists()
+
+
+def test_verify_password_rejects_malformed_hashes():
+    assert not verify_password("secret", "pbkdf2_sha256$bad$zz$00")
+    assert not verify_password("secret", "pbkdf2_sha256$999999999$00$00")
