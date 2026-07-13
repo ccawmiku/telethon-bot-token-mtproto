@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
 import logging
@@ -10,6 +11,7 @@ from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any, AsyncIterator
+from urllib.parse import quote
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
@@ -21,6 +23,7 @@ from app.bot import BotManager
 from app.config import Settings, SettingsStore, verify_password
 from app.history import DownloadHistory, RETRYABLE_STATUSES
 from app.logs import MemoryLogHandler
+from app.previews import PREVIEWABLE_CATEGORIES, PreviewError, PreviewGenerator
 
 logging.basicConfig(
     level=os.getenv("LOG_LEVEL", "INFO").upper(),
@@ -38,6 +41,7 @@ history = DownloadHistory(
     flush_interval=settings.history_flush_interval_seconds,
 )
 bot_manager = BotManager(history)
+preview_generator = PreviewGenerator(settings.config_dir / "previews")
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 SESSION_COOKIE = "telethon_media_bot_session"
 SESSION_MAX_AGE_SECONDS = 7 * 24 * 60 * 60
@@ -104,6 +108,38 @@ def _prune_login_attempts(key: str) -> deque[float]:
     return attempts
 
 
+def configured_download_dirs(current: Settings) -> dict[str, Path]:
+    return {
+        "images": current.image_download_dir.resolve(),
+        "videos": current.video_download_dir.resolve(),
+        "files": current.file_download_dir.resolve(),
+    }
+
+
+def resolve_downloaded_file(current: Settings, category: str, file_name: str) -> Path:
+    download_dirs = configured_download_dirs(current)
+    if category not in download_dirs:
+        raise HTTPException(status_code=404, detail="文件不存在")
+    download_dir = download_dirs[category]
+    target = (download_dir / file_name).resolve()
+    if download_dir not in target.parents or not target.is_file():
+        raise HTTPException(status_code=404, detail="文件不存在")
+    return target
+
+
+def _media_urls(category: str, name: str, modified_ns: int) -> dict[str, str | None]:
+    encoded_category = quote(category, safe="")
+    encoded_name = quote(name, safe="")
+    return {
+        "url": f"/files/{encoded_category}/{encoded_name}",
+        "preview_url": (
+            f"/previews/{encoded_category}/{encoded_name}?v={modified_ns}"
+            if category in PREVIEWABLE_CATEGORIES
+            else None
+        ),
+    }
+
+
 def list_downloaded_files(download_dirs: dict[str, Path]) -> list[dict[str, Any]]:
     files: list[dict[str, Any]] = []
     for category, download_dir in download_dirs.items():
@@ -128,11 +164,34 @@ def list_downloaded_files(download_dirs: dict[str, Path]) -> list[dict[str, Any]
                     "name": path.name,
                     "size_bytes": stat.st_size,
                     "modified_at": stat.st_mtime,
-                    "url": f"/files/{category}/{path.name}",
+                    **_media_urls(category, path.name, stat.st_mtime_ns),
                 }
             )
     files.sort(key=lambda item: item["modified_at"], reverse=True)
     return files[:200]
+
+
+def list_download_records(current: Settings) -> list[dict[str, Any]]:
+    records = history.list()
+    download_dirs = configured_download_dirs(current)
+    for record in records:
+        record["category"] = None
+        record["url"] = None
+        record["preview_url"] = None
+        try:
+            path = Path(record["path"]).resolve()
+            stat = path.stat()
+        except (KeyError, OSError, TypeError):
+            continue
+        if not path.is_file() or stat.st_size == 0:
+            continue
+        for category, download_dir in download_dirs.items():
+            if path.parent != download_dir:
+                continue
+            record["category"] = category
+            record.update(_media_urls(category, path.name, stat.st_mtime_ns))
+            break
+    return records
 
 
 def _session_secret() -> str:
@@ -275,14 +334,8 @@ async def api_state(request: Request):
     return {
         "settings": current.public_dict(),
         "bot": bot_manager.state(),
-        "downloads": history.list(),
-        "files": list_downloaded_files(
-            {
-                "images": current.image_download_dir,
-                "videos": current.video_download_dir,
-                "files": current.file_download_dir,
-            }
-        ),
+        "downloads": list_download_records(current),
+        "files": list_downloaded_files(configured_download_dirs(current)),
     }
 
 
@@ -385,6 +438,17 @@ async def retry_download(request: Request, record_id: str):
     return {"queued": count}
 
 
+@app.post("/api/downloads/retry-failed")
+async def retry_all_failed_downloads(request: Request):
+    require_panel_auth(request)
+    if not bot_manager.running:
+        raise HTTPException(status_code=409, detail="Bot 未运行，无法重新获取 Telegram 消息")
+    total = len(history.list_statuses(RETRYABLE_STATUSES, limit=None))
+    queued = await bot_manager.retry("failed", all_matches=True)
+    remaining = len(history.list_statuses(RETRYABLE_STATUSES, limit=None))
+    return {"total": total, "queued": queued, "remaining": remaining}
+
+
 @app.post("/api/downloads/cleanup")
 async def cleanup_downloads(request: Request):
     require_panel_auth(request)
@@ -395,16 +459,23 @@ async def cleanup_downloads(request: Request):
 @app.get("/files/{category}/{file_name}")
 async def get_file(request: Request, category: str, file_name: str):
     require_panel_auth(request)
-    current = settings_store.settings
-    download_dirs = {
-        "images": current.image_download_dir.resolve(),
-        "videos": current.video_download_dir.resolve(),
-        "files": current.file_download_dir.resolve(),
-    }
-    if category not in download_dirs:
-        raise HTTPException(status_code=404, detail="文件不存在")
-    download_dir = download_dirs[category]
-    target = (download_dir / file_name).resolve()
-    if download_dir not in target.parents or not target.is_file():
-        raise HTTPException(status_code=404, detail="文件不存在")
+    target = resolve_downloaded_file(settings_store.settings, category, file_name)
     return FileResponse(target, filename=target.name)
+
+
+@app.get("/previews/{category}/{file_name}")
+async def get_preview(request: Request, category: str, file_name: str):
+    require_panel_auth(request)
+    if category not in PREVIEWABLE_CATEGORIES:
+        raise HTTPException(status_code=404, detail="该文件类型不支持预览")
+    target = resolve_downloaded_file(settings_store.settings, category, file_name)
+    try:
+        preview = await asyncio.to_thread(preview_generator.generate, target, category)
+    except PreviewError as exc:
+        logger.warning("无法生成预览 %s：%s", target, exc)
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return FileResponse(
+        preview,
+        media_type="image/jpeg",
+        headers={"Cache-Control": "private, max-age=86400"},
+    )

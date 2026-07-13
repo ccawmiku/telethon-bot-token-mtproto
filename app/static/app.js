@@ -18,6 +18,7 @@ const els = {
   stopBtn: document.querySelector("#stopBtn"),
   resumeBtn: document.querySelector("#resumeBtn"),
   limitOffBtn: document.querySelector("#limitOffBtn"),
+  retryAllBtn: document.querySelector("#retryAllBtn"),
   cleanupBtn: document.querySelector("#cleanupBtn"),
   logoutBtn: document.querySelector("#logoutBtn"),
   apiId: document.querySelector("#apiId"),
@@ -125,6 +126,25 @@ function categoryText(value) {
   return { images: "图片", videos: "视频", files: "其他" }[value] || value;
 }
 
+function previewMarkup(item) {
+  const name = item.name || item.file_name || "文件";
+  const icon = item.category === "videos" ? "🎞" : item.category === "images" ? "🖼" : "📄";
+  const image = item.preview_url
+    ? `<img class="preview-image" src="${escapeHtml(item.preview_url)}" alt="${escapeHtml(name)} 的预览图" loading="lazy" />`
+    : "";
+  const content = `<span class="preview-fallback" aria-hidden="true">${icon}</span>${image}`;
+  if (item.url) {
+    return `<a class="preview-frame" href="${escapeHtml(item.url)}" title="下载 ${escapeHtml(name)}">${content}</a>`;
+  }
+  return `<span class="preview-frame">${content}</span>`;
+}
+
+function enablePreviewFallbacks(container) {
+  container.querySelectorAll("img.preview-image").forEach((image) => {
+    image.addEventListener("error", () => image.classList.add("hidden"), { once: true });
+  });
+}
+
 async function checkAuth() {
   const state = await requestJson("/api/auth/status");
   authenticated = state.authenticated;
@@ -175,24 +195,28 @@ function renderDownloads(downloads) {
     return `
       <tr>
         <td><span class="badge ${escapeHtml(item.status)}">${escapeHtml(statusText(item.status))}</span></td>
+        <td>${previewMarkup(item)}</td>
         <td><div class="file-name" title="${escapeHtml(item.file_name)}">${escapeHtml(item.file_name)}</div><div class="subline">任务 ${escapeHtml(item.id.slice(0, 8))}${item.error ? ` · ${escapeHtml(item.error)}` : ""}</div></td>
         <td><div class="progress"><div style="width:${progress}%"></div></div><div class="progress-label">${progress}%</div></td>
         <td class="transfer"><div>${sizeText}</div><div class="subline">${escapeHtml(speedParts.join(" · ") || "-")}</div></td>
         <td>${formatTime(item.updated_at)}</td>
         <td>${actions}</td>
       </tr>`;
-  }).join("") || `<tr><td colspan="6" class="muted">暂无下载记录</td></tr>`;
+  }).join("") || `<tr><td colspan="7" class="muted">暂无下载记录</td></tr>`;
+  enablePreviewFallbacks(els.downloadsBody);
 }
 
 function renderFiles(files) {
   els.filesBody.innerHTML = files.map((item) => `
     <tr>
+      <td>${previewMarkup(item)}</td>
       <td><div class="file-name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</div></td>
       <td><span class="badge">${escapeHtml(categoryText(item.category))}</span></td>
       <td>${formatBytes(item.size_bytes)}</td>
       <td>${formatTime(item.modified_at)}</td>
       <td><a href="/files/${encodeURIComponent(item.category)}/${encodeURIComponent(item.name)}">下载</a></td>
-    </tr>`).join("") || `<tr><td colspan="5" class="muted">暂无文件</td></tr>`;
+    </tr>`).join("") || `<tr><td colspan="6" class="muted">暂无文件</td></tr>`;
+  enablePreviewFallbacks(els.filesBody);
 }
 
 function renderLogs(logs) {
@@ -224,6 +248,7 @@ async function refresh() {
     els.stopBtn.disabled = !running;
     els.resumeBtn.disabled = !controls.paused;
     els.limitOffBtn.disabled = !controls.speed_limit_bytes_per_second;
+    els.retryAllBtn.disabled = !running || !state.downloads.some((item) => ["failed", "interrupted", "cancelled"].includes(item.status));
     fillSettings(state.settings);
     renderDownloads(state.downloads);
     renderFiles(state.files);
@@ -322,6 +347,20 @@ els.limitOffBtn.addEventListener("click", async () => {
     await refresh();
   } catch (error) {
     els.formMessage.textContent = error.message;
+  }
+});
+
+els.retryAllBtn.addEventListener("click", async () => {
+  els.retryAllBtn.disabled = true;
+  try {
+    const result = await postJson("/api/downloads/retry-failed");
+    const remaining = result.remaining ? `，仍有 ${result.remaining} 条未入队` : "";
+    els.formMessage.textContent = `已将 ${result.queued}/${result.total} 条失败任务重新加入队列${remaining}`;
+    await refresh();
+  } catch (error) {
+    els.formMessage.textContent = error.message;
+  } finally {
+    els.retryAllBtn.disabled = false;
   }
 });
 

@@ -52,3 +52,12 @@ def test_progress_updates_are_throttled_but_flush_persists_latest_state(tmp_path
 
     assert before_flush["progress"] == 0
     assert after_flush["progress"] == 55
+
+
+def test_list_statuses_can_return_all_matches(tmp_path):
+    history = DownloadHistory(tmp_path / "downloads.json")
+    for index in range(12):
+        history.add(DownloadRecord(str(index), index, 1, f"{index}.bin", str(tmp_path / f"{index}.bin"), status="failed"))
+
+    assert len(history.list_statuses({"failed"})) == 10
+    assert len(history.list_statuses({"failed"}, limit=None)) == 12

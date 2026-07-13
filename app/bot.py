@@ -915,11 +915,11 @@ class BotManager:
                     await self._album_terminal(job.album_key, record_id, "cancelled")
         return len(ids)
 
-    async def retry(self, target: str) -> int:
+    async def retry(self, target: str, *, all_matches: bool = False) -> int:
         if not self.client or not self.queue:
             return 0
         if target.lower() == "failed":
-            records = self.history.list_statuses(RETRYABLE_STATUSES, limit=10)
+            records = self.history.list_statuses(RETRYABLE_STATUSES, limit=None if all_matches else 10)
         else:
             record = self.history.find(target)
             records = [record] if record and record["status"] in RETRYABLE_STATUSES else []

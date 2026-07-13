@@ -160,10 +160,12 @@ class DownloadHistory:
                 records = records[: max(0, limit)]
             return [asdict(record) for record in records]
 
-    def list_statuses(self, statuses: set[str], limit: int = 10) -> list[dict[str, Any]]:
+    def list_statuses(self, statuses: set[str], limit: int | None = 10) -> list[dict[str, Any]]:
         with self._lock:
             records = [record for record in reversed(self._records) if record.status in statuses]
-            return [asdict(record) for record in records[:limit]]
+            if limit is not None:
+                records = records[: max(0, limit)]
+            return [asdict(record) for record in records]
 
     def remove_statuses(self, statuses: set[str]) -> int:
         with self._lock:

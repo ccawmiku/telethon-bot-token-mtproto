@@ -12,7 +12,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-RUN addgroup --system bot && adduser --system --ingroup bot bot
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y ffmpeg \
+    && rm -rf /var/lib/apt/lists/* \
+    && addgroup --system bot \
+    && adduser --system --ingroup bot bot
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt

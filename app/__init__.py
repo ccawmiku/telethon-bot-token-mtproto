@@ -2,4 +2,4 @@
 
 import os
 
-__version__ = os.getenv("APP_VERSION", "1.6.0").removeprefix("v")
+__version__ = os.getenv("APP_VERSION", "1.7.0").removeprefix("v")

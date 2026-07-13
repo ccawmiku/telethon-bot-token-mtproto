@@ -3,6 +3,9 @@ import sys
 from unittest.mock import AsyncMock
 
 from fastapi.testclient import TestClient
+from PIL import Image
+
+from app.history import DownloadRecord
 
 
 def load_main(monkeypatch, tmp_path):
@@ -49,7 +52,9 @@ def test_control_panel_and_javascript_assets_are_served(monkeypatch, tmp_path):
     assert page.status_code == 200
     assert '<script src="/static/app.js"></script>' in page.text
     assert "自动重试次数" in page.text
+    assert "重试全部失败" in page.text
     assert "function renderDownloads" in script.text
+    assert "function previewMarkup" in script.text
 
 
 def test_login_is_rate_limited(monkeypatch, tmp_path):
@@ -96,3 +101,78 @@ def test_file_route_rejects_path_traversal(monkeypatch, tmp_path):
         response = client.get("/files/files/%2E%2E%2Fsecret.txt")
 
     assert response.status_code == 404
+
+
+def test_image_previews_are_generated_and_exposed_in_both_lists(monkeypatch, tmp_path):
+    main = load_main(monkeypatch, tmp_path)
+    image_dir = main.settings_store.settings.image_download_dir
+    image_dir.mkdir(parents=True, exist_ok=True)
+    image_path = image_dir / "测试 image.png"
+    Image.new("RGB", (640, 360), "#0f766e").save(image_path)
+    main.history.add(
+        DownloadRecord(
+            "preview-job",
+            10,
+            123,
+            image_path.name,
+            str(image_path),
+            status="complete",
+            progress=100,
+            size_bytes=image_path.stat().st_size,
+        )
+    )
+
+    with TestClient(main.app) as client:
+        login(client, main)
+        state = client.get("/api/state").json()
+        file_preview_url = state["files"][0]["preview_url"]
+        history_preview_url = state["downloads"][0]["preview_url"]
+        preview = client.get(file_preview_url)
+
+    assert file_preview_url == history_preview_url
+    assert "%E6%B5%8B%E8%AF%95%20image.png" in file_preview_url
+    assert preview.status_code == 200
+    assert preview.headers["content-type"] == "image/jpeg"
+    assert preview.content.startswith(b"\xff\xd8")
+    assert list((main.settings_store.settings.config_dir / "previews").glob("*.jpg"))
+
+
+def test_preview_route_rejects_path_traversal(monkeypatch, tmp_path):
+    main = load_main(monkeypatch, tmp_path)
+    outside = tmp_path / "secret.png"
+    Image.new("RGB", (10, 10)).save(outside)
+    with TestClient(main.app) as client:
+        login(client, main)
+        response = client.get("/previews/images/%2E%2E%2Fsecret.png")
+
+    assert response.status_code == 404
+
+
+def test_retry_all_failed_endpoint_queues_every_available_record(monkeypatch, tmp_path):
+    main = load_main(monkeypatch, tmp_path)
+    for index, status in enumerate(("failed", "interrupted", "cancelled"), start=1):
+        main.history.add(DownloadRecord(f"failed-{index}", index, 123, f"{index}.bin", str(tmp_path / f"{index}.bin"), status=status))
+
+    class ConnectedClient:
+        def is_connected(self):
+            return True
+
+        async def disconnect(self):
+            return None
+
+    main.bot_manager.client = ConnectedClient()
+
+    async def retry_all(_target, *, all_matches=False):
+        assert all_matches is True
+        for record in main.history.list_statuses(main.RETRYABLE_STATUSES, limit=None):
+            main.history.update(record["id"], status="queued")
+        return 3
+
+    main.bot_manager.retry = AsyncMock(side_effect=retry_all)
+    with TestClient(main.app) as client:
+        login(client, main)
+        response = client.post("/api/downloads/retry-failed", json={})
+
+    assert response.status_code == 200
+    assert response.json() == {"total": 3, "queued": 3, "remaining": 0}
+    main.bot_manager.retry.assert_awaited_once_with("failed", all_matches=True)
