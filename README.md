@@ -1,6 +1,6 @@
-# Telethon Media Downloader Bot
+# Telegram 媒体下载机器人
 
-使用 Bot Token 和 MTProto 下载 Telegram 图片、视频及文件，提供中文 Web 控制台、用户白名单、有界下载队列、实时进度、自动重试和运行时控制。
+基于 Telethon、Bot Token 和 MTProto 下载 Telegram 图片、视频与文件，提供中文 Web 控制台、用户白名单、有界队列、实时进度、失败重试和运行时控制。
 
 当前版本：`v1.8`
 
