@@ -34,13 +34,20 @@
       }
 
       .bar {
-        width: min(1180px, calc(100% - 32px));
+        width: min(1560px, calc(100% - 40px));
         margin: 0 auto;
-        min-height: 68px;
+        min-height: 72px;
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 16px;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
       }
 
       h1 {
@@ -52,10 +59,10 @@
       }
 
       main {
-        width: min(1180px, calc(100% - 32px));
-        margin: 22px auto 40px;
+        width: min(1560px, calc(100% - 40px));
+        margin: 20px auto 40px;
         display: grid;
-        gap: 18px;
+        gap: 16px;
       }
 
       .status-row {
@@ -72,8 +79,8 @@
       }
 
       .metric {
-        min-height: 92px;
-        padding: 16px;
+        min-height: 104px;
+        padding: 18px;
         display: flex;
         flex-direction: column;
         justify-content: space-between;
@@ -97,10 +104,12 @@
 
       .grid {
         display: grid;
-        grid-template-columns: 390px minmax(0, 1fr);
-        gap: 18px;
+        grid-template-columns: minmax(300px, 320px) minmax(0, 1fr);
+        gap: 16px;
         align-items: start;
       }
+
+      .workspace-panel { min-width: 0; overflow: hidden; }
 
       .panel h2 {
         margin: 0;
@@ -171,14 +180,27 @@
       button:disabled { opacity: 0.55; cursor: not-allowed; }
       button.small { min-height: 30px; padding: 0 9px; font-size: 12px; }
       .subline { margin-top: 5px; color: var(--muted); font-size: 12px; line-height: 1.45; }
-      .transfer { min-width: 145px; }
+      .transfer { line-height: 1.4; }
       .progress-label { margin-top: 5px; color: var(--muted); font-size: 12px; white-space: nowrap; }
 
       .tabs {
         display: flex;
-        gap: 6px;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 12px;
         border-bottom: 1px solid var(--line);
-        padding: 12px 12px 0;
+        padding: 12px 14px 0;
+      }
+
+      .tab-list, .tab-actions {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+
+      .tab-actions {
+        padding-bottom: 8px;
       }
 
       .tab {
@@ -200,11 +222,29 @@
       table {
         width: 100%;
         border-collapse: collapse;
-        min-width: 720px;
+        table-layout: fixed;
       }
 
+      .downloads-table { min-width: 920px; }
+      .files-table { min-width: 760px; }
+      .downloads-table .col-preview, .files-table .col-preview { width: 132px; }
+      .downloads-table .col-status { width: 82px; }
+      .downloads-table .col-progress { width: 158px; }
+      .downloads-table .col-transfer { width: 168px; }
+      .downloads-table .col-time, .files-table .col-time { width: 132px; }
+      .downloads-table .col-action, .files-table .col-action { width: 78px; }
+      .files-table .col-type { width: 92px; }
+      .files-table .col-size { width: 118px; }
+
+      tbody tr {
+        height: 96px;
+        transition: background-color 120ms ease;
+      }
+
+      tbody tr:hover { background: #f8fafc; }
+
       th, td {
-        padding: 12px 14px;
+        padding: 12px 12px;
         border-bottom: 1px solid var(--line);
         text-align: left;
         vertical-align: middle;
@@ -212,6 +252,8 @@
       }
 
       th {
+        height: 48px;
+        background: #f9fafb;
         color: var(--muted);
         font-size: 12px;
         text-transform: uppercase;
@@ -228,6 +270,7 @@
         font-weight: 750;
         background: #eef2f6;
         color: #344054;
+        white-space: nowrap;
       }
 
       .badge.complete { background: #dcfce7; color: var(--ok); }
@@ -237,7 +280,8 @@
       .badge.running { background: #ccfbf1; color: var(--accent-strong); }
 
       .progress {
-        width: 120px;
+        width: 100%;
+        max-width: 142px;
         height: 8px;
         background: #e5e7eb;
         border-radius: 999px;
@@ -253,21 +297,26 @@
       .muted { color: var(--muted); }
       .error { color: var(--danger); }
       .file-name {
-        max-width: 280px;
-        white-space: nowrap;
+        display: -webkit-box;
+        max-width: 100%;
+        min-width: 0;
+        overflow-wrap: anywhere;
         overflow: hidden;
-        text-overflow: ellipsis;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+        line-clamp: 2;
+        line-height: 1.45;
       }
 
       .preview-frame {
         position: relative;
-        width: 96px;
-        height: 56px;
+        width: 112px;
+        height: 68px;
         display: grid;
         place-items: center;
         overflow: hidden;
         border: 1px solid var(--line);
-        border-radius: 6px;
+        border-radius: 8px;
         background: #eef2f6;
         color: var(--muted);
         text-decoration: none;
@@ -282,6 +331,15 @@
       }
 
       .preview-fallback { font-size: 24px; }
+
+      .timestamp {
+        display: grid;
+        gap: 3px;
+        white-space: nowrap;
+        line-height: 1.25;
+      }
+
+      .cell-actions { white-space: nowrap; }
 
       .login-overlay {
         position: fixed;
@@ -332,15 +390,21 @@
         overflow-wrap: anywhere;
       }
 
-      @media (max-width: 920px) {
+      @media (max-width: 1080px) {
         .status-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .grid { grid-template-columns: 1fr; }
+      }
+
+      @media (max-width: 760px) {
+        .tabs { align-items: stretch; flex-direction: column; }
+        .tab-actions { padding-bottom: 10px; }
       }
 
       @media (max-width: 560px) {
         .bar { align-items: flex-start; flex-direction: column; padding: 16px 0; }
         .status-row { grid-template-columns: 1fr; }
-        main, .bar { width: min(100% - 20px, 1180px); }
+        main, .bar { width: calc(100% - 20px); }
+        .preview-frame { width: 96px; height: 58px; }
       }
     </style>
   </head>
@@ -360,7 +424,10 @@
 
     <header>
       <div class="bar">
-        <h1>媒体下载 Bot 控制台</h1>
+        <div class="brand">
+          <h1>媒体下载 Bot 控制台</h1>
+          <span class="badge">v{{ version }}</span>
+        </div>
         <div class="actions">
           <button id="startBtn" class="primary">启动</button>
           <button id="restartBtn">重启</button>
@@ -393,7 +460,7 @@
       </section>
 
       <section class="grid">
-        <div class="panel">
+        <div class="panel settings-panel">
           <h2>设置</h2>
           <form id="settingsForm">
             <label class="field">
@@ -471,21 +538,34 @@
           </form>
         </div>
 
-        <div class="panel">
+        <div class="panel workspace-panel">
           <div class="tabs">
-            <button class="tab active" data-tab="downloads" type="button">下载记录</button>
-            <button class="tab" data-tab="files" type="button">文件</button>
-            <button class="tab" data-tab="logs" type="button">日志</button>
-            <button id="retryAllBtn" class="small" type="button">重试全部失败</button>
-            <button id="cleanupBtn" class="small danger" type="button">清理失败/中断记录</button>
+            <div class="tab-list">
+              <button class="tab active" data-tab="downloads" type="button">下载记录</button>
+              <button class="tab" data-tab="files" type="button">文件</button>
+              <button class="tab" data-tab="logs" type="button">日志</button>
+            </div>
+            <div class="tab-actions">
+              <button id="retryAllBtn" class="small" type="button">重试全部失败</button>
+              <button id="cleanupBtn" class="small danger" type="button">清理失败/中断记录</button>
+            </div>
           </div>
 
           <div id="downloadsTab" class="table-wrap">
-            <table>
+            <table class="downloads-table">
+              <colgroup>
+                <col class="col-preview" />
+                <col class="col-status" />
+                <col class="col-file" />
+                <col class="col-progress" />
+                <col class="col-transfer" />
+                <col class="col-time" />
+                <col class="col-action" />
+              </colgroup>
               <thead>
                 <tr>
-                  <th>状态</th>
                   <th>预览</th>
+                  <th>状态</th>
                   <th>文件</th>
                   <th>进度</th>
                   <th>传输</th>
@@ -498,7 +578,15 @@
           </div>
 
           <div id="filesTab" class="table-wrap hidden">
-            <table>
+            <table class="files-table">
+              <colgroup>
+                <col class="col-preview" />
+                <col class="col-file" />
+                <col class="col-type" />
+                <col class="col-size" />
+                <col class="col-time" />
+                <col class="col-action" />
+              </colgroup>
               <thead>
                 <tr>
                   <th>预览</th>
@@ -520,6 +608,6 @@
       </section>
     </main>
 
-    <script src="/static/app.js"></script>
+    <script src="/static/app.js?v={{ version }}"></script>
   </body>
 </html>

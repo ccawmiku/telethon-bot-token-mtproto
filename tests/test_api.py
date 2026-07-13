@@ -38,6 +38,7 @@ def test_panel_requires_auth_and_bootstrap_login_sets_security_headers(monkeypat
     assert unauthorized.status_code == 401
     assert status.json()["bootstrap_required"] is True
     assert authorized.status_code == 200
+    assert authorized.json()["version"] == main.__version__
     assert authorized.headers["x-content-type-options"] == "nosniff"
     assert authorized.headers["x-frame-options"] == "DENY"
     assert "frame-ancestors 'none'" in authorized.headers["content-security-policy"]
@@ -50,9 +51,12 @@ def test_control_panel_and_javascript_assets_are_served(monkeypatch, tmp_path):
         script = client.get("/static/app.js")
 
     assert page.status_code == 200
-    assert '<script src="/static/app.js"></script>' in page.text
+    assert f'<script src="/static/app.js?v={main.__version__}"></script>' in page.text
+    assert f"v{main.__version__}" in page.text
+    assert page.headers["cache-control"] == "no-store"
     assert "自动重试次数" in page.text
     assert "重试全部失败" in page.text
+    assert page.text.index("<th>预览</th>") < page.text.index("<th>状态</th>")
     assert "function renderDownloads" in script.text
     assert "function previewMarkup" in script.text
 

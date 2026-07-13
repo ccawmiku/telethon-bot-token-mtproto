@@ -72,6 +72,13 @@ function formatTime(value) {
   return new Date(value).toLocaleString();
 }
 
+function timeMarkup(value) {
+  if (!value) return '<span class="muted">-</span>';
+  const date = new Date(typeof value === "number" ? value * 1000 : value);
+  if (Number.isNaN(date.getTime())) return '<span class="muted">-</span>';
+  return `<time class="timestamp" datetime="${escapeHtml(date.toISOString())}"><span>${escapeHtml(date.toLocaleDateString())}</span><span>${escapeHtml(date.toLocaleTimeString([], { hour12: false }))}</span></time>`;
+}
+
 function escapeHtml(value) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -178,9 +185,11 @@ function renderDownloads(downloads) {
   const retryableStatuses = new Set(["failed", "interrupted", "cancelled"]);
   els.downloadsBody.innerHTML = downloads.map((item) => {
     const progress = Math.max(0, Math.min(100, Number(item.progress) || 0));
-    const sizeText = item.total_bytes
-      ? `${formatBytes(item.downloaded_bytes)} / ${formatBytes(item.total_bytes)}`
-      : formatBytes(item.size_bytes || item.downloaded_bytes);
+    const sizeText = item.status === "complete"
+      ? formatBytes(item.size_bytes || item.total_bytes || item.downloaded_bytes)
+      : item.total_bytes
+        ? `${formatBytes(item.downloaded_bytes)} / ${formatBytes(item.total_bytes)}`
+        : formatBytes(item.size_bytes || item.downloaded_bytes);
     const speedParts = [];
     if (item.speed_bytes_per_second) speedParts.push(`${formatBytes(item.speed_bytes_per_second)}/s`);
     if (item.speed_limit_bytes_per_second) speedParts.push(`限速 ${formatBytes(item.speed_limit_bytes_per_second)}/s`);
@@ -194,13 +203,13 @@ function renderDownloads(downloads) {
     }
     return `
       <tr>
-        <td><span class="badge ${escapeHtml(item.status)}">${escapeHtml(statusText(item.status))}</span></td>
-        <td>${previewMarkup(item)}</td>
-        <td><div class="file-name" title="${escapeHtml(item.file_name)}">${escapeHtml(item.file_name)}</div><div class="subline">任务 ${escapeHtml(item.id.slice(0, 8))}${item.error ? ` · ${escapeHtml(item.error)}` : ""}</div></td>
-        <td><div class="progress"><div style="width:${progress}%"></div></div><div class="progress-label">${progress}%</div></td>
+        <td class="preview-cell">${previewMarkup(item)}</td>
+        <td class="status-cell"><span class="badge ${escapeHtml(item.status)}">${escapeHtml(statusText(item.status))}</span></td>
+        <td class="file-cell"><div class="file-name" title="${escapeHtml(item.file_name)}">${escapeHtml(item.file_name)}</div><div class="subline">任务 ${escapeHtml(item.id.slice(0, 8))}${item.error ? ` · ${escapeHtml(item.error)}` : ""}</div></td>
+        <td class="progress-cell"><div class="progress"><div style="width:${progress}%"></div></div><div class="progress-label">${progress}%</div></td>
         <td class="transfer"><div>${sizeText}</div><div class="subline">${escapeHtml(speedParts.join(" · ") || "-")}</div></td>
-        <td>${formatTime(item.updated_at)}</td>
-        <td>${actions}</td>
+        <td>${timeMarkup(item.updated_at)}</td>
+        <td class="cell-actions">${actions}</td>
       </tr>`;
   }).join("") || `<tr><td colspan="7" class="muted">暂无下载记录</td></tr>`;
   enablePreviewFallbacks(els.downloadsBody);
@@ -209,12 +218,12 @@ function renderDownloads(downloads) {
 function renderFiles(files) {
   els.filesBody.innerHTML = files.map((item) => `
     <tr>
-      <td>${previewMarkup(item)}</td>
-      <td><div class="file-name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</div></td>
+      <td class="preview-cell">${previewMarkup(item)}</td>
+      <td class="file-cell"><div class="file-name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</div></td>
       <td><span class="badge">${escapeHtml(categoryText(item.category))}</span></td>
       <td>${formatBytes(item.size_bytes)}</td>
-      <td>${formatTime(item.modified_at)}</td>
-      <td><a href="/files/${encodeURIComponent(item.category)}/${encodeURIComponent(item.name)}">下载</a></td>
+      <td>${timeMarkup(item.modified_at)}</td>
+      <td class="cell-actions"><a href="${escapeHtml(item.url)}">下载</a></td>
     </tr>`).join("") || `<tr><td colspan="6" class="muted">暂无文件</td></tr>`;
   enablePreviewFallbacks(els.filesBody);
 }

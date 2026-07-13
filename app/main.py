@@ -19,6 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app import __version__
 from app.bot import BotManager
 from app.config import Settings, SettingsStore, verify_password
 from app.history import DownloadHistory, RETRYABLE_STATUSES
@@ -281,7 +282,12 @@ async def healthz():
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
-    return templates.TemplateResponse(request=request, name="index.html")
+    return templates.TemplateResponse(
+        request=request,
+        name="index.html",
+        context={"version": __version__},
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @app.get("/api/auth/status")
@@ -332,6 +338,7 @@ async def api_state(request: Request):
     require_panel_auth(request)
     current = settings_store.settings
     return {
+        "version": __version__,
         "settings": current.public_dict(),
         "bot": bot_manager.state(),
         "downloads": list_download_records(current),
